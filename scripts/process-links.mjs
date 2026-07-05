@@ -26,7 +26,10 @@ Options:
   --run-name NAME             Run folder name. Default: run-YYYY-MM-DD-HHMMSS
   --download-dir DIR          Download folder. Default: current run folder/downloads
   --transcription-model ID    Default: OPENAI_TRANSCRIPTION_MODEL or whisper-1
-  --report-model ID           Default: OPENAI_REPORT_MODEL or gpt-4.1
+  --report-model ID           Default: OPENAI_REPORT_MODEL or gpt-5.5
+  --reasoning-effort LEVEL    Reasoning effort for GPT-5/o-series. Default: medium
+  --verbosity LEVEL           low, medium, or high for GPT-5 models. Default: medium
+  --max-output-tokens N       Report output budget. Default: 24000 for GPT-5, 12000 otherwise.
   --prompt TEXT               Transcription prompt for names, jargon, acronyms.
   --chunk-seconds N           Audio chunk seconds. Default: 180
   --transcript FILE           Generate a report from an existing transcript file.
@@ -58,11 +61,20 @@ const manifestPath = path.join(runDir, 'manifest.json');
 const transcriptionModel = String(
   args['transcription-model'] ?? process.env.OPENAI_TRANSCRIPTION_MODEL ?? 'whisper-1',
 );
-const reportModel = String(args['report-model'] ?? process.env.OPENAI_REPORT_MODEL ?? 'gpt-4.1');
+const reportModel = String(args['report-model'] ?? process.env.OPENAI_REPORT_MODEL ?? 'gpt-5.5');
+const reportReasoningEffort = String(
+  args['reasoning-effort'] ?? process.env.OPENAI_REASONING_EFFORT ?? 'medium',
+);
+const requestedVerbosity = String(args.verbosity ?? process.env.OPENAI_TEXT_VERBOSITY ?? 'medium');
 const chunkSeconds = Math.max(30, Number(args['chunk-seconds'] ?? 180));
 const noReport = Boolean(args['no-report']);
 const skipDownload = Boolean(args['skip-download']);
 const transcriptOnlyPath = args.transcript ? path.resolve(String(args.transcript)) : null;
+const reportMaxOutputTokens = Number(
+  args['max-output-tokens'] ??
+    process.env.OPENAI_MAX_OUTPUT_TOKENS ??
+    (/^(gpt-5|o[134])(?:[.-]|$)/i.test(reportModel) ? 24000 : 12000),
+);
 
 if (transcriptOnlyPath && noReport) {
   throw new Error('--transcript cannot be combined with --no-report.');
@@ -103,6 +115,9 @@ const manifest = {
   reportDir,
   transcriptionModel,
   reportModel: noReport ? null : reportModel,
+  reportReasoningEffort: noReport ? null : reportReasoningEffort,
+  reportVerbosity: noReport ? null : requestedVerbosity,
+  reportMaxOutputTokens: noReport ? null : reportMaxOutputTokens,
   items: [],
 };
 
@@ -146,7 +161,34 @@ const withRetry = async (label, fn, retries = 5) => {
 };
 
 const modelSupportsReasoningEffort = (model) =>
-  /^(o1|o3|o4|gpt-5)(?:-|$)/i.test(String(model));
+  /^(o1|o3|o4|gpt-5)(?:[.-]|$)/i.test(String(model));
+
+const modelSupportsTextVerbosity = (model) => /^gpt-5(?:[.-]|$)/i.test(String(model));
+
+const modelTextVerbosity = (model, verbosity) => {
+  const normalized = ['low', 'medium', 'high'].includes(String(verbosity))
+    ? String(verbosity)
+    : 'medium';
+
+  if (modelSupportsTextVerbosity(model)) {
+    return normalized;
+  }
+
+  return 'medium';
+};
+
+const assertCompleteResponse = (response, label) => {
+  if (response.status === 'incomplete') {
+    const reason = response.incomplete_details?.reason ?? 'unknown';
+    throw new Error(
+      `${label} was incomplete (${reason}). Try increasing --max-output-tokens or lowering --reasoning-effort.`,
+    );
+  }
+
+  if (!response.output_text) {
+    throw new Error(`${label} returned no output text.`);
+  }
+};
 
 const downloadVideo = (url) => {
   const outputTemplate = path.join(downloadDir, '%(title).180B [%(id)s].%(ext)s');
@@ -504,8 +546,11 @@ const summarizeChunk = async ({chunk, index, total}) => {
   const response = await withRetry(`Chunk summary ${index}/${total}`, async () =>
     openai.responses.create({
       model: reportModel,
+      ...(modelSupportsReasoningEffort(reportModel)
+        ? {reasoning: {effort: reportReasoningEffort}}
+        : {}),
       text: {
-        verbosity: 'medium',
+        verbosity: modelTextVerbosity(reportModel, requestedVerbosity),
         format: {
           type: 'json_schema',
           name: 'learning_video_chunk_summary',
@@ -517,7 +562,7 @@ const summarizeChunk = async ({chunk, index, total}) => {
         {
           role: 'system',
           content:
-            'You summarize timestamped video transcripts for a serious learner. Preserve important timestamps, claims, concepts, examples, quotes, and unanswered questions. Do not invent facts beyond the transcript.',
+            'You summarize timestamped video transcripts for a serious learner and essay writer. Preserve argument structure, important timestamps, claims, concepts, examples, quotes, tensions, counterpoints, and unanswered questions. Do not invent facts beyond the transcript.',
         },
         {
           role: 'user',
@@ -527,6 +572,7 @@ const summarizeChunk = async ({chunk, index, total}) => {
     }),
   );
 
+  assertCompleteResponse(response, `Chunk summary ${index}/${total}`);
   return JSON.parse(response.output_text);
 };
 
@@ -559,7 +605,7 @@ const generateReport = async ({title, source, transcriptText}) => {
   const reportRequest = {
     model: reportModel,
     text: {
-      verbosity: 'medium',
+      verbosity: modelTextVerbosity(reportModel, requestedVerbosity),
       format: {
         type: 'json_schema',
         name: 'learning_video_research_report',
@@ -571,23 +617,47 @@ const generateReport = async ({title, source, transcriptText}) => {
       {
         role: 'system',
         content:
-          'You create deep research reports from video transcripts for learners. Be clear, structured, and useful. Base the report on the transcript only. If a claim needs outside verification, list it under claimsToVerify instead of presenting it as verified. Include timestamps when available.',
+          [
+            'You are a senior research analyst and essay editor creating high-grade Medium-style learning articles from video transcripts.',
+            'Write with a clear thesis, narrative flow, strong section headings, concrete examples, and useful synthesis.',
+            'The Markdown report should feel like a polished article first and a study guide second, not a generic bullet dump.',
+            'Base every substantive point on the transcript. Attribute uncertain claims to the speaker and list anything requiring outside verification under claimsToVerify.',
+            'Preserve useful timestamps. Prefer precise, readable prose over hype. Do not pad.',
+          ].join(' '),
       },
       {
         role: 'user',
-        content: `Source: ${source}\nWorking title: ${title}\n\nCreate a deep learning report from this material:\n\n${reportInput}`,
+        content: [
+          `Source: ${source}`,
+          `Working title: ${title}`,
+          '',
+          'Create a polished medium-length research article and study artifact from this material.',
+          '',
+          'ReportMarkdown requirements:',
+          '- 1,500 to 2,500 words unless the transcript cannot support that length.',
+          '- Start with an H1 title and a short deck/subtitle.',
+          '- Use H2 sections with article-style headings.',
+          '- Explain the central argument, why it matters, the best examples, the tradeoffs, and the practical lesson.',
+          '- Include a concise "What to remember" section near the end.',
+          '- Include a short "Questions to keep thinking about" section.',
+          '- Avoid overusing bullets; use paragraphs for the main article body.',
+          '',
+          `Material:\n\n${reportInput}`,
+        ].join('\n'),
       },
     ],
+    max_output_tokens: reportMaxOutputTokens,
   };
 
   if (modelSupportsReasoningEffort(reportModel)) {
-    reportRequest.reasoning = {effort: 'medium'};
+    reportRequest.reasoning = {effort: reportReasoningEffort};
   }
 
   const response = await withRetry('Research report', async () =>
     openai.responses.create(reportRequest),
   );
 
+  assertCompleteResponse(response, 'Research report');
   const report = JSON.parse(response.output_text);
   report.chunkNotes = chunkNotes;
   return report;

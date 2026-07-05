@@ -63,7 +63,8 @@ npm run doctor
 npm run research
 npm run research -- --links "/path/to/links.txt"
 npm run research -- --run-name my-study-run
-npm run research -- --report-model gpt-4.1
+npm run research -- --report-model gpt-5.5
+npm run research -- --reasoning-effort medium --verbosity medium
 npm run research -- --transcription-model whisper-1
 npm run research -- --transcript "outputs/run-.../transcripts/video.timestamped.md"
 ```
@@ -77,7 +78,10 @@ Useful options:
 | `--run-name NAME` | Custom run folder name. |
 | `--download-dir DIR` | Reuse or override the download folder. |
 | `--transcription-model ID` | OpenAI transcription model. Default: `OPENAI_TRANSCRIPTION_MODEL` or `whisper-1`. |
-| `--report-model ID` | OpenAI report model. Default: `OPENAI_REPORT_MODEL` or `gpt-4.1`. |
+| `--report-model ID` | OpenAI report model. Default: `OPENAI_REPORT_MODEL` or `gpt-5.5`. |
+| `--reasoning-effort LEVEL` | Reasoning effort for GPT-5/o-series models. Default: `OPENAI_REASONING_EFFORT` or `medium`. |
+| `--verbosity LEVEL` | `low`, `medium`, or `high` for GPT-5 report writing. Default: `OPENAI_TEXT_VERBOSITY` or `medium`. |
+| `--max-output-tokens N` | Report token budget. Default: `OPENAI_MAX_OUTPUT_TOKENS`, then `24000` for GPT-5 or `12000` otherwise. |
 | `--prompt TEXT` | Extra transcription context for names, jargon, or acronyms. |
 | `--chunk-seconds N` | Audio chunk size for long videos. Default: `180`. |
 | `--transcript FILE` | Generate a report from an existing transcript without downloading or transcribing again. |
@@ -101,3 +105,19 @@ This creates a new report-only run and avoids paying for transcription again.
 ## Notes
 
 The report is based on the transcript. It can identify claims worth checking, but it does not automatically browse the web or verify external facts.
+
+## Report Quality
+
+The report generator defaults to `gpt-5.5` through the Responses API. It uses structured outputs for reliable JSON plus a polished Markdown article. The default `medium` reasoning and `medium` verbosity settings are meant to create high-grade, readable article-style reports without turning every video into an overly long white paper.
+
+For more exhaustive teaching-style reports:
+
+```bash
+npm run research -- --reasoning-effort high --verbosity high --max-output-tokens 32000
+```
+
+For cheaper/faster reports:
+
+```bash
+npm run research -- --report-model gpt-5.4-mini --reasoning-effort low --verbosity medium
+```
