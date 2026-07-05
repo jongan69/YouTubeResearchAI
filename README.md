@@ -82,6 +82,7 @@ Useful options:
 | `--reasoning-effort LEVEL` | Reasoning effort for GPT-5/o-series models. Default: `OPENAI_REASONING_EFFORT` or `medium`. |
 | `--verbosity LEVEL` | `low`, `medium`, or `high` for GPT-5 report writing. Default: `OPENAI_TEXT_VERBOSITY` or `medium`. |
 | `--max-output-tokens N` | Report token budget. Default: `OPENAI_MAX_OUTPUT_TOKENS`, then `24000` for GPT-5 or `12000` otherwise. |
+| `--report-chunk-chars N` | Chunk transcript only above this size. Default: `100000` for GPT-5 models or `18000` otherwise. |
 | `--prompt TEXT` | Extra transcription context for names, jargon, or acronyms. |
 | `--chunk-seconds N` | Audio chunk size for long videos. Default: `180`. |
 | `--transcript FILE` | Generate a report from an existing transcript without downloading or transcribing again. |
@@ -109,6 +110,10 @@ The report is based on the transcript. It can identify claims worth checking, bu
 ## Report Quality
 
 The report generator defaults to `gpt-5.5` through the Responses API. It uses structured outputs for reliable JSON plus a polished Markdown article. The default `medium` reasoning and `medium` verbosity settings are meant to create high-grade, readable article-style reports without turning every video into an overly long white paper.
+
+Reports are written as standalone documents. They should explain the subject directly and provide maximum value without requiring the reader to watch the source video or know that the report came from a transcript.
+
+For GPT-5.5, the app keeps most normal-length transcripts intact instead of pre-summarizing them first. That usually produces better standalone articles because the final model can reason over the original material directly.
 
 For more exhaustive teaching-style reports:
 

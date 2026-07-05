@@ -30,6 +30,7 @@ Options:
   --reasoning-effort LEVEL    Reasoning effort for GPT-5/o-series. Default: medium
   --verbosity LEVEL           low, medium, or high for GPT-5 models. Default: medium
   --max-output-tokens N       Report output budget. Default: 24000 for GPT-5, 12000 otherwise.
+  --report-chunk-chars N      Chunk transcript only above this size. Default: 100000 for GPT-5, 18000 otherwise.
   --prompt TEXT               Transcription prompt for names, jargon, acronyms.
   --chunk-seconds N           Audio chunk seconds. Default: 180
   --transcript FILE           Generate a report from an existing transcript file.
@@ -75,6 +76,11 @@ const reportMaxOutputTokens = Number(
     process.env.OPENAI_MAX_OUTPUT_TOKENS ??
     (/^(gpt-5|o[134])(?:[.-]|$)/i.test(reportModel) ? 24000 : 12000),
 );
+const reportChunkChars = Number(
+  args['report-chunk-chars'] ??
+    process.env.OPENAI_REPORT_CHUNK_CHARS ??
+    (/^gpt-5(?:[.-]|$)/i.test(reportModel) ? 100000 : 18000),
+);
 
 if (transcriptOnlyPath && noReport) {
   throw new Error('--transcript cannot be combined with --no-report.');
@@ -118,6 +124,7 @@ const manifest = {
   reportReasoningEffort: noReport ? null : reportReasoningEffort,
   reportVerbosity: noReport ? null : requestedVerbosity,
   reportMaxOutputTokens: noReport ? null : reportMaxOutputTokens,
+  reportChunkChars: noReport ? null : reportChunkChars,
   items: [],
 };
 
@@ -577,7 +584,7 @@ const summarizeChunk = async ({chunk, index, total}) => {
 };
 
 const generateReport = async ({title, source, transcriptText}) => {
-  const chunks = splitText(transcriptText);
+  const chunks = splitText(transcriptText, reportChunkChars);
   const chunkNotes = [];
 
   if (chunks.length > 1) {
@@ -618,10 +625,12 @@ const generateReport = async ({title, source, transcriptText}) => {
         role: 'system',
         content:
           [
-            'You are a senior research analyst and essay editor creating high-grade Medium-style learning articles from video transcripts.',
+            'You are a senior research analyst and essay editor creating high-grade standalone learning articles from source notes.',
             'Write with a clear thesis, narrative flow, strong section headings, concrete examples, and useful synthesis.',
             'The Markdown report should feel like a polished article first and a study guide second, not a generic bullet dump.',
-            'Base every substantive point on the transcript. Attribute uncertain claims to the speaker and list anything requiring outside verification under claimsToVerify.',
+            'The reader should not need to watch, hear, or know about the original source material. Do not refer to a video, transcript, talk, lecture, presenter, speaker, host, or episode in reportMarkdown.',
+            'Transform the material into a self-contained document that presents the ideas directly.',
+            'Base every substantive point on the supplied material. Frame uncertain claims as claims that need verification and list them under claimsToVerify.',
             'Preserve useful timestamps. Prefer precise, readable prose over hype. Do not pad.',
           ].join(' '),
       },
@@ -632,6 +641,8 @@ const generateReport = async ({title, source, transcriptText}) => {
           `Working title: ${title}`,
           '',
           'Create a polished medium-length research article and study artifact from this material.',
+          'The final Markdown must stand alone. Write as if it were an original article/briefing, not a recap of source media.',
+          'Avoid phrases like "the video", "the speaker", "the presenter", "the transcript", "the talk", "the episode", or "the source says".',
           '',
           'ReportMarkdown requirements:',
           '- 1,500 to 2,500 words unless the transcript cannot support that length.',
