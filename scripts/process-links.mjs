@@ -29,6 +29,9 @@ Options:
   --report-model ID           Default: OPENAI_REPORT_MODEL or gpt-4.1
   --prompt TEXT               Transcription prompt for names, jargon, acronyms.
   --chunk-seconds N           Audio chunk seconds. Default: 180
+  --transcript FILE           Generate a report from an existing transcript file.
+  --title TEXT                Optional title when using --transcript.
+  --source TEXT               Optional source URL/path when using --transcript.
   --skip-download             Treat link lines as local video paths.
   --no-report                 Download and transcribe only.
 `;
@@ -59,18 +62,25 @@ const reportModel = String(args['report-model'] ?? process.env.OPENAI_REPORT_MOD
 const chunkSeconds = Math.max(30, Number(args['chunk-seconds'] ?? 180));
 const noReport = Boolean(args['no-report']);
 const skipDownload = Boolean(args['skip-download']);
+const transcriptOnlyPath = args.transcript ? path.resolve(String(args.transcript)) : null;
 
-if (!fs.existsSync(linksPath)) {
+if (transcriptOnlyPath && noReport) {
+  throw new Error('--transcript cannot be combined with --no-report.');
+}
+
+if (!transcriptOnlyPath && !fs.existsSync(linksPath)) {
   throw new Error(`Links file not found: ${linksPath}`);
 }
 
-const inputs = fs
-  .readFileSync(linksPath, 'utf8')
-  .split(/\r?\n/)
-  .map((line) => line.trim())
-  .filter((line) => line && !line.startsWith('#'));
+const inputs = transcriptOnlyPath
+  ? []
+  : fs
+      .readFileSync(linksPath, 'utf8')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'));
 
-if (inputs.length === 0) {
+if (!transcriptOnlyPath && inputs.length === 0) {
   throw new Error(`No links or local paths found in ${linksPath}`);
 }
 
@@ -79,7 +89,9 @@ ensureDir(runDir);
 ensureDir(downloadDir);
 ensureDir(transcriptDir);
 ensureDir(reportDir);
-fs.copyFileSync(linksPath, path.join(runDir, 'links.txt'));
+if (fs.existsSync(linksPath)) {
+  fs.copyFileSync(linksPath, path.join(runDir, 'links.txt'));
+}
 
 const openai = new OpenAI({maxRetries: 0});
 const manifest = {
@@ -132,6 +144,9 @@ const withRetry = async (label, fn, retries = 5) => {
   }
   throw lastError;
 };
+
+const modelSupportsReasoningEffort = (model) =>
+  /^(o1|o3|o4|gpt-5)(?:-|$)/i.test(String(model));
 
 const downloadVideo = (url) => {
   const outputTemplate = path.join(downloadDir, '%(title).180B [%(id)s].%(ext)s');
@@ -541,31 +556,36 @@ const generateReport = async ({title, source, transcriptText}) => {
           2,
         )}`;
 
-  const response = await withRetry('Research report', async () =>
-    openai.responses.create({
-      model: reportModel,
-      reasoning: {effort: 'medium'},
-      text: {
-        verbosity: 'high',
-        format: {
-          type: 'json_schema',
-          name: 'learning_video_research_report',
-          strict: true,
-          schema: reportSchema,
-        },
+  const reportRequest = {
+    model: reportModel,
+    text: {
+      verbosity: 'medium',
+      format: {
+        type: 'json_schema',
+        name: 'learning_video_research_report',
+        strict: true,
+        schema: reportSchema,
       },
-      input: [
-        {
-          role: 'system',
-          content:
-            'You create deep research reports from video transcripts for learners. Be clear, structured, and useful. Base the report on the transcript only. If a claim needs outside verification, list it under claimsToVerify instead of presenting it as verified. Include timestamps when available.',
-        },
-        {
-          role: 'user',
-          content: `Source: ${source}\nWorking title: ${title}\n\nCreate a deep learning report from this material:\n\n${reportInput}`,
-        },
-      ],
-    }),
+    },
+    input: [
+      {
+        role: 'system',
+        content:
+          'You create deep research reports from video transcripts for learners. Be clear, structured, and useful. Base the report on the transcript only. If a claim needs outside verification, list it under claimsToVerify instead of presenting it as verified. Include timestamps when available.',
+      },
+      {
+        role: 'user',
+        content: `Source: ${source}\nWorking title: ${title}\n\nCreate a deep learning report from this material:\n\n${reportInput}`,
+      },
+    ],
+  };
+
+  if (modelSupportsReasoningEffort(reportModel)) {
+    reportRequest.reasoning = {effort: 'medium'};
+  }
+
+  const response = await withRetry('Research report', async () =>
+    openai.responses.create(reportRequest),
   );
 
   const report = JSON.parse(response.output_text);
@@ -594,6 +614,52 @@ const writeReportFiles = ({slug, report}) => {
   fs.writeFileSync(reportMarkdownPath, `${report.reportMarkdown.trim()}\n`);
   return {reportJsonPath, reportMarkdownPath};
 };
+
+const readTranscriptForReport = (transcriptPath) => {
+  if (!fs.existsSync(transcriptPath)) {
+    throw new Error(`Transcript not found: ${transcriptPath}`);
+  }
+
+  if (path.extname(transcriptPath).toLowerCase() === '.json') {
+    const transcription = JSON.parse(fs.readFileSync(transcriptPath, 'utf8'));
+    return timestampedTranscript(transcription);
+  }
+
+  return fs.readFileSync(transcriptPath, 'utf8').trim();
+};
+
+if (transcriptOnlyPath) {
+  const slug = slugify(
+    path
+      .basename(transcriptOnlyPath, path.extname(transcriptOnlyPath))
+      .replace(/\.timestamped$|\.transcript$/i, ''),
+  );
+  const title = String(args.title ?? slug.replace(/-/g, ' '));
+  const source = String(args.source ?? transcriptOnlyPath);
+  const transcriptText = readTranscriptForReport(transcriptOnlyPath);
+  const item = {
+    input: transcriptOnlyPath,
+    sourceVideo: null,
+    slug,
+    transcript: {
+      sourcePath: transcriptOnlyPath,
+    },
+    report: null,
+  };
+
+  console.log(`Generating deep research report from existing transcript: ${transcriptOnlyPath}`);
+  manifest.items.push(item);
+  writeManifest();
+
+  const report = await generateReport({title, source, transcriptText});
+  item.report = writeReportFiles({slug, report});
+  writeManifest();
+
+  console.log('');
+  console.log(`Done. Run folder: ${runDir}`);
+  console.log(`Manifest: ${manifestPath}`);
+  process.exit(0);
+}
 
 for (const [index, input] of inputs.entries()) {
   console.log(`\n[${index + 1}/${inputs.length}] ${skipDownload ? 'Using' : 'Downloading'} ${input}`);

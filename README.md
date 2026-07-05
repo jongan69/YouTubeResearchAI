@@ -65,6 +65,7 @@ npm run research -- --links "/path/to/links.txt"
 npm run research -- --run-name my-study-run
 npm run research -- --report-model gpt-4.1
 npm run research -- --transcription-model whisper-1
+npm run research -- --transcript "outputs/run-.../transcripts/video.timestamped.md"
 ```
 
 Useful options:
@@ -79,8 +80,23 @@ Useful options:
 | `--report-model ID` | OpenAI report model. Default: `OPENAI_REPORT_MODEL` or `gpt-4.1`. |
 | `--prompt TEXT` | Extra transcription context for names, jargon, or acronyms. |
 | `--chunk-seconds N` | Audio chunk size for long videos. Default: `180`. |
+| `--transcript FILE` | Generate a report from an existing transcript without downloading or transcribing again. |
+| `--title TEXT` | Optional report title when using `--transcript`. |
+| `--source TEXT` | Optional source URL/path when using `--transcript`. |
 | `--skip-download` | Treat each link line as an already-downloaded local video path. |
 | `--no-report` | Download and transcribe only. |
+
+## Resume After A Report Failure
+
+If download/transcription succeeded but report generation failed, reuse the saved transcript:
+
+```bash
+npm run research -- \
+  --transcript "outputs/run-2026-07-05-023714/transcripts/clean-code-horrible-performance-td5nrevftbu.timestamped.md" \
+  --title "Clean Code, Horrible Performance"
+```
+
+This creates a new report-only run and avoids paying for transcription again.
 
 ## Notes
 
