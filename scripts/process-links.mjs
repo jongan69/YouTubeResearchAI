@@ -3,8 +3,6 @@ import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {setTimeout as sleep} from 'node:timers/promises';
-import OpenAI from 'openai';
 import {
   ensureDir,
   formatTimestamp,
@@ -15,6 +13,7 @@ import {
   timestampSlug,
   uniqueDir,
 } from './lib.mjs';
+import {buildConfig, createProviders} from './ai-config.mjs';
 
 const usage = `
 Usage:
@@ -25,12 +24,14 @@ Options:
   --out-dir DIR               Output root. Default: ./outputs
   --run-name NAME             Run folder name. Default: run-YYYY-MM-DD-HHMMSS
   --download-dir DIR          Download folder. Default: current run folder/downloads
+  --ai-provider ID            AI provider. Default: AI_PROVIDER env var or openai
+  --transcription-provider ID Transcription provider override. Default: auto-detect
   --transcription-model ID    Default: OPENAI_TRANSCRIPTION_MODEL or whisper-1
-  --report-model ID           Default: OPENAI_REPORT_MODEL or gpt-5.5
-  --reasoning-effort LEVEL    Reasoning effort for GPT-5/o-series. Default: medium
-  --verbosity LEVEL           low, medium, or high for GPT-5 models. Default: medium
-  --max-output-tokens N       Report output budget. Default: 24000 for GPT-5, 12000 otherwise.
-  --report-chunk-chars N      Chunk transcript only above this size. Default: 100000 for GPT-5, 18000 otherwise.
+  --report-model ID           Default: provider-specific (gpt-5.5, claude-sonnet-5, etc.)
+  --reasoning-effort LEVEL    Reasoning/thinking effort: low, medium, high. Default: medium
+  --verbosity LEVEL           Writing verbosity: low, medium, high. Default: medium
+  --max-output-tokens N       Report output budget. Default varies by provider.
+  --report-chunk-chars N      Chunk transcript only above this size. Default: 100000 for large models, 18000 otherwise.
   --prompt TEXT               Transcription prompt for names, jargon, acronyms.
   --chunk-seconds N           Audio chunk seconds. Default: 180
   --transcript FILE           Generate a report from an existing transcript file.
@@ -47,8 +48,30 @@ if (args.help || args.h) {
 }
 
 loadEnv();
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY is required. Add it to .env.');
+
+const resolvedConfig = buildConfig(args);
+
+// Validate that the configured provider has its required API key
+const keyChecks = {
+  openai: () => resolvedConfig.openaiApiKey,
+  anthropic: () => resolvedConfig.anthropicApiKey,
+  google: () => resolvedConfig.googleApiKey,
+  'openai-compat': () => resolvedConfig.openaiApiKey && resolvedConfig.openaiBaseUrl,
+};
+
+const keyCheck = keyChecks[resolvedConfig.aiProvider];
+if (!keyCheck?.()) {
+  const messages = {
+    openai: 'OPENAI_API_KEY is required. Add it to .env.',
+    anthropic: 'ANTHROPIC_API_KEY is required. Add it to .env.',
+    google: 'GOOGLE_API_KEY is required. Add it to .env.',
+    'openai-compat':
+      'OPENAI_API_KEY and OPENAI_BASE_URL are required for openai-compat. Add them to .env.',
+  };
+  throw new Error(
+    messages[resolvedConfig.aiProvider] ??
+      `Unknown AI provider "${resolvedConfig.aiProvider}". Supported: openai, anthropic, google, openai-compat.`,
+  );
 }
 
 const linksPath = path.resolve(String(args.links ?? path.join(projectRoot, 'links.txt')));
@@ -59,28 +82,16 @@ const downloadDir = path.resolve(String(args['download-dir'] ?? path.join(runDir
 const transcriptDir = path.join(runDir, 'transcripts');
 const reportDir = path.join(runDir, 'reports');
 const manifestPath = path.join(runDir, 'manifest.json');
-const transcriptionModel = String(
-  args['transcription-model'] ?? process.env.OPENAI_TRANSCRIPTION_MODEL ?? 'whisper-1',
-);
-const reportModel = String(args['report-model'] ?? process.env.OPENAI_REPORT_MODEL ?? 'gpt-5.5');
-const reportReasoningEffort = String(
-  args['reasoning-effort'] ?? process.env.OPENAI_REASONING_EFFORT ?? 'medium',
-);
-const requestedVerbosity = String(args.verbosity ?? process.env.OPENAI_TEXT_VERBOSITY ?? 'medium');
+const transcriptionModel = resolvedConfig.transcriptionModel;
+const reportModel = resolvedConfig.reportModel;
+const reportReasoningEffort = resolvedConfig.reasoningEffort;
+const requestedVerbosity = resolvedConfig.verbosity;
 const chunkSeconds = Math.max(30, Number(args['chunk-seconds'] ?? 180));
 const noReport = Boolean(args['no-report']);
 const skipDownload = Boolean(args['skip-download']);
 const transcriptOnlyPath = args.transcript ? path.resolve(String(args.transcript)) : null;
-const reportMaxOutputTokens = Number(
-  args['max-output-tokens'] ??
-    process.env.OPENAI_MAX_OUTPUT_TOKENS ??
-    (/^(gpt-5|o[134])(?:[.-]|$)/i.test(reportModel) ? 24000 : 12000),
-);
-const reportChunkChars = Number(
-  args['report-chunk-chars'] ??
-    process.env.OPENAI_REPORT_CHUNK_CHARS ??
-    (/^gpt-5(?:[.-]|$)/i.test(reportModel) ? 100000 : 18000),
-);
+const reportMaxOutputTokens = resolvedConfig.reportMaxOutputTokens;
+const reportChunkChars = resolvedConfig.reportChunkChars;
 
 if (transcriptOnlyPath && noReport) {
   throw new Error('--transcript cannot be combined with --no-report.');
@@ -111,7 +122,8 @@ if (fs.existsSync(linksPath)) {
   fs.copyFileSync(linksPath, path.join(runDir, 'links.txt'));
 }
 
-const openai = new OpenAI({maxRetries: 0});
+const {ai, transcription: transcriptionProvider} = await createProviders(resolvedConfig);
+
 const manifest = {
   createdAt: new Date().toISOString(),
   linksPath,
@@ -130,71 +142,6 @@ const manifest = {
 
 const writeManifest = () => {
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-};
-
-const isRetryable = (error) => {
-  const status = Number(error?.status ?? error?.response?.status ?? 0);
-  const code = String(error?.code ?? error?.cause?.code ?? '');
-
-  return (
-    status === 408 ||
-    status === 409 ||
-    status === 429 ||
-    status >= 500 ||
-    ['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ENOTFOUND'].includes(code)
-  );
-};
-
-const withRetry = async (label, fn, retries = 5) => {
-  let lastError;
-  for (let attempt = 1; attempt <= retries; attempt += 1) {
-    try {
-      return await fn(attempt);
-    } catch (error) {
-      lastError = error;
-      if (!isRetryable(error) || attempt === retries) {
-        throw error;
-      }
-      const delayMs = Math.min(30000, 1500 * 2 ** (attempt - 1));
-      console.warn(
-        `${label} failed with ${error?.status ?? error?.code ?? 'unknown error'}; retrying in ${Math.round(
-          delayMs / 1000,
-        )}s...`,
-      );
-      await sleep(delayMs);
-    }
-  }
-  throw lastError;
-};
-
-const modelSupportsReasoningEffort = (model) =>
-  /^(o1|o3|o4|gpt-5)(?:[.-]|$)/i.test(String(model));
-
-const modelSupportsTextVerbosity = (model) => /^gpt-5(?:[.-]|$)/i.test(String(model));
-
-const modelTextVerbosity = (model, verbosity) => {
-  const normalized = ['low', 'medium', 'high'].includes(String(verbosity))
-    ? String(verbosity)
-    : 'medium';
-
-  if (modelSupportsTextVerbosity(model)) {
-    return normalized;
-  }
-
-  return 'medium';
-};
-
-const assertCompleteResponse = (response, label) => {
-  if (response.status === 'incomplete') {
-    const reason = response.incomplete_details?.reason ?? 'unknown';
-    throw new Error(
-      `${label} was incomplete (${reason}). Try increasing --max-output-tokens or lowering --reasoning-effort.`,
-    );
-  }
-
-  if (!response.output_text) {
-    throw new Error(`${label} returned no output text.`);
-  }
 };
 
 const downloadVideo = (url) => {
@@ -342,18 +289,11 @@ const combineTranscriptions = (parts, durationSeconds) => {
   };
 };
 
-const transcribeAudioFile = async ({audioPath, prompt, label}) =>
-  withRetry(`Transcription ${label}`, async (attempt) => {
-    console.log(
-      `Transcribing ${label} with OpenAI (${transcriptionModel}), attempt ${attempt}/5...`,
-    );
-    return openai.audio.transcriptions.create({
-      file: fs.createReadStream(audioPath),
-      model: transcriptionModel,
-      response_format: 'verbose_json',
-      prompt,
-      timestamp_granularities: ['word'],
-    });
+const transcribeAudioFile = async ({audioPath, prompt}) =>
+  transcriptionProvider.transcribe({
+    audioPath,
+    model: transcriptionModel,
+    prompt,
   });
 
 const transcribeVideo = async ({videoPath, prompt}) => {
@@ -368,7 +308,7 @@ const transcribeVideo = async ({videoPath, prompt}) => {
     );
 
     if (durationSeconds <= chunkSeconds) {
-      return transcribeAudioFile({audioPath, prompt, label: 'audio'});
+      return transcribeAudioFile({audioPath, prompt});
     }
 
     const parts = [];
@@ -390,7 +330,6 @@ const transcribeVideo = async ({videoPath, prompt}) => {
       const transcription = await transcribeAudioFile({
         audioPath: chunkPath,
         prompt,
-        label: `chunk ${index + 1}/${chunkCount}`,
       });
       parts.push({transcription, offsetSeconds});
     }
@@ -550,37 +489,15 @@ const reportSchema = {
 };
 
 const summarizeChunk = async ({chunk, index, total}) => {
-  const response = await withRetry(`Chunk summary ${index}/${total}`, async () =>
-    openai.responses.create({
-      model: reportModel,
-      ...(modelSupportsReasoningEffort(reportModel)
-        ? {reasoning: {effort: reportReasoningEffort}}
-        : {}),
-      text: {
-        verbosity: modelTextVerbosity(reportModel, requestedVerbosity),
-        format: {
-          type: 'json_schema',
-          name: 'learning_video_chunk_summary',
-          strict: true,
-          schema: chunkSummarySchema,
-        },
-      },
-      input: [
-        {
-          role: 'system',
-          content:
-            'You summarize timestamped video transcripts for a serious learner and essay writer. Preserve argument structure, important timestamps, claims, concepts, examples, quotes, tensions, counterpoints, and unanswered questions. Do not invent facts beyond the transcript.',
-        },
-        {
-          role: 'user',
-          content: `Chunk ${index} of ${total}:\n\n${chunk}`,
-        },
-      ],
-    }),
-  );
-
-  assertCompleteResponse(response, `Chunk summary ${index}/${total}`);
-  return JSON.parse(response.output_text);
+  const result = await ai.generateStructured({
+    systemPrompt:
+      'You summarize timestamped video transcripts for a serious learner and essay writer. Preserve argument structure, important timestamps, claims, concepts, examples, quotes, tensions, counterpoints, and unanswered questions. Do not invent facts beyond the transcript.',
+    userInput: `Chunk ${index} of ${total}:\n\n${chunk}`,
+    jsonSchema: chunkSummarySchema,
+    schemaName: 'learning_video_chunk_summary',
+    maxOutputTokens: reportMaxOutputTokens,
+  });
+  return result.outputJson;
 };
 
 const generateReport = async ({title, source, transcriptText}) => {
@@ -609,67 +526,41 @@ const generateReport = async ({title, source, transcriptText}) => {
           2,
         )}`;
 
-  const reportRequest = {
-    model: reportModel,
-    text: {
-      verbosity: modelTextVerbosity(reportModel, requestedVerbosity),
-      format: {
-        type: 'json_schema',
-        name: 'learning_video_research_report',
-        strict: true,
-        schema: reportSchema,
-      },
-    },
-    input: [
-      {
-        role: 'system',
-        content:
-          [
-            'You are a senior research analyst and essay editor creating high-grade standalone learning articles from source notes.',
-            'Write with a clear thesis, narrative flow, strong section headings, concrete examples, and useful synthesis.',
-            'The Markdown report should feel like a polished article first and a study guide second, not a generic bullet dump.',
-            'The reader should not need to watch, hear, or know about the original source material. Do not refer to a video, transcript, talk, lecture, presenter, speaker, host, or episode in reportMarkdown.',
-            'Transform the material into a self-contained document that presents the ideas directly.',
-            'Base every substantive point on the supplied material. Frame uncertain claims as claims that need verification and list them under claimsToVerify.',
-            'Preserve useful timestamps. Prefer precise, readable prose over hype. Do not pad.',
-          ].join(' '),
-      },
-      {
-        role: 'user',
-        content: [
-          `Source: ${source}`,
-          `Working title: ${title}`,
-          '',
-          'Create a polished medium-length research article and study artifact from this material.',
-          'The final Markdown must stand alone. Write as if it were an original article/briefing, not a recap of source media.',
-          'Avoid phrases like "the video", "the speaker", "the presenter", "the transcript", "the talk", "the episode", or "the source says".',
-          '',
-          'ReportMarkdown requirements:',
-          '- 1,500 to 2,500 words unless the transcript cannot support that length.',
-          '- Start with an H1 title and a short deck/subtitle.',
-          '- Use H2 sections with article-style headings.',
-          '- Explain the central argument, why it matters, the best examples, the tradeoffs, and the practical lesson.',
-          '- Include a concise "What to remember" section near the end.',
-          '- Include a short "Questions to keep thinking about" section.',
-          '- Avoid overusing bullets; use paragraphs for the main article body.',
-          '',
-          `Material:\n\n${reportInput}`,
-        ].join('\n'),
-      },
-    ],
-    max_output_tokens: reportMaxOutputTokens,
-  };
+  const result = await ai.generateStructured({
+    systemPrompt: [
+      'You are a senior research analyst and essay editor creating high-grade standalone learning articles from source notes.',
+      'Write with a clear thesis, narrative flow, strong section headings, concrete examples, and useful synthesis.',
+      'The Markdown report should feel like a polished article first and a study guide second, not a generic bullet dump.',
+      'The reader should not need to watch, hear, or know about the original source material. Do not refer to a video, transcript, talk, lecture, presenter, speaker, host, or episode in reportMarkdown.',
+      'Transform the material into a self-contained document that presents the ideas directly.',
+      'Base every substantive point on the supplied material. Frame uncertain claims as claims that need verification and list them under claimsToVerify.',
+      'Preserve useful timestamps. Prefer precise, readable prose over hype. Do not pad.',
+    ].join(' '),
+    userInput: [
+      `Source: ${source}`,
+      `Working title: ${title}`,
+      '',
+      'Create a polished medium-length research article and study artifact from this material.',
+      'The final Markdown must stand alone. Write as if it were an original article/briefing, not a recap of source media.',
+      'Avoid phrases like "the video", "the speaker", "the presenter", "the transcript", "the talk", "the episode", or "the source says".',
+      '',
+      'ReportMarkdown requirements:',
+      '- 1,500 to 2,500 words unless the transcript cannot support that length.',
+      '- Start with an H1 title and a short deck/subtitle.',
+      '- Use H2 sections with article-style headings.',
+      '- Explain the central argument, why it matters, the best examples, the tradeoffs, and the practical lesson.',
+      '- Include a concise "What to remember" section near the end.',
+      '- Include a short "Questions to keep thinking about" section.',
+      '- Avoid overusing bullets; use paragraphs for the main article body.',
+      '',
+      `Material:\n\n${reportInput}`,
+    ].join('\n'),
+    jsonSchema: reportSchema,
+    schemaName: 'learning_video_research_report',
+    maxOutputTokens: reportMaxOutputTokens,
+  });
 
-  if (modelSupportsReasoningEffort(reportModel)) {
-    reportRequest.reasoning = {effort: reportReasoningEffort};
-  }
-
-  const response = await withRetry('Research report', async () =>
-    openai.responses.create(reportRequest),
-  );
-
-  assertCompleteResponse(response, 'Research report');
-  const report = JSON.parse(response.output_text);
+  const report = result.outputJson;
   report.chunkNotes = chunkNotes;
   return report;
 };

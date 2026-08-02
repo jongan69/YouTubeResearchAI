@@ -12,7 +12,36 @@ npm install
 cp .env.example .env
 ```
 
-Add `OPENAI_API_KEY=...` to `.env`.
+### Choose your AI provider
+
+Edit `.env` to pick your AI provider and add your API key:
+
+**OpenAI** (default):
+```env
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-your-openai-key-here
+```
+
+**Anthropic Claude** (transcription requires an OpenAI key too):
+```env
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
+OPENAI_API_KEY=sk-your-openai-key-here  # needed for transcription
+```
+
+**Google Gemini** (transcription requires an OpenAI key too):
+```env
+AI_PROVIDER=google
+GOOGLE_API_KEY=your-google-api-key-here
+OPENAI_API_KEY=sk-your-openai-key-here  # needed for transcription
+```
+
+**OpenAI-compatible** (Groq, DeepSeek, Ollama, etc.):
+```env
+AI_PROVIDER=openai-compat
+OPENAI_API_KEY=your-api-key-here
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
+```
 
 Put one YouTube URL per line in `links.txt`, then run:
 
@@ -56,6 +85,23 @@ outputs/run-YYYY-MM-DD-HHMMSS/
 - Follow-up reading/search topics
 - 7-day study plan
 
+## Supported AI Providers
+
+| Provider | Report Generation | Transcription | API Key(s) |
+|---|---|---|---|
+| **OpenAI** | Responses API (GPT-5.5, etc.) | Whisper | `OPENAI_API_KEY` |
+| **Anthropic** | Messages API (Claude) | ❌ (needs OpenAI) | `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` |
+| **Google** | Gemini API | ❌ (needs OpenAI) | `GOOGLE_API_KEY` + `OPENAI_API_KEY` |
+| **OpenAI-compat** | Chat Completions (Groq, DeepSeek, Ollama, etc.) | Whisper (if supported) | `OPENAI_API_KEY` + `OPENAI_BASE_URL` |
+
+### Feature mapping
+
+| OpenAI Feature | Anthropic | Google | OpenAI-compat |
+|---|---|---|---|
+| Reasoning effort | Extended thinking budget | thinkingConfig | System prompt guidance |
+| Text verbosity | System prompt instruction | System prompt instruction | System prompt instruction |
+| JSON structured output | Tool use with tool_choice | response_schema | json_schema / json_object |
+
 ## Commands
 
 ```bash
@@ -77,12 +123,14 @@ Useful options:
 | `--out-dir DIR` | Output root. Defaults to `outputs`. |
 | `--run-name NAME` | Custom run folder name. |
 | `--download-dir DIR` | Reuse or override the download folder. |
-| `--transcription-model ID` | OpenAI transcription model. Default: `OPENAI_TRANSCRIPTION_MODEL` or `whisper-1`. |
-| `--report-model ID` | OpenAI report model. Default: `OPENAI_REPORT_MODEL` or `gpt-5.5`. |
-| `--reasoning-effort LEVEL` | Reasoning effort for GPT-5/o-series models. Default: `OPENAI_REASONING_EFFORT` or `medium`. |
-| `--verbosity LEVEL` | `low`, `medium`, or `high` for GPT-5 report writing. Default: `OPENAI_TEXT_VERBOSITY` or `medium`. |
-| `--max-output-tokens N` | Report token budget. Default: `OPENAI_MAX_OUTPUT_TOKENS`, then `24000` for GPT-5 or `12000` otherwise. |
-| `--report-chunk-chars N` | Chunk transcript only above this size. Default: `100000` for GPT-5 models or `18000` otherwise. |
+| `--ai-provider ID` | Override `AI_PROVIDER` from .env. |
+| `--transcription-model ID` | Transcription model. Default from env or `whisper-1`. |
+| `--transcription-provider ID` | Override `TRANSCRIPTION_PROVIDER` from .env. |
+| `--report-model ID` | Report model. Default depends on provider. |
+| `--reasoning-effort LEVEL` | `low`, `medium`, or `high`. Behavior varies by provider. |
+| `--verbosity LEVEL` | `low`, `medium`, or `high`. Behavior varies by provider. |
+| `--max-output-tokens N` | Report token budget. Default varies by provider. |
+| `--report-chunk-chars N` | Chunk transcript only above this size. Default: 100000 for large-context models, 18000 otherwise. |
 | `--prompt TEXT` | Extra transcription context for names, jargon, or acronyms. |
 | `--chunk-seconds N` | Audio chunk size for long videos. Default: `180`. |
 | `--transcript FILE` | Generate a report from an existing transcript without downloading or transcribing again. |
@@ -125,4 +173,22 @@ For cheaper/faster reports:
 
 ```bash
 npm run research -- --report-model gpt-5.4-mini --reasoning-effort low --verbosity medium
+```
+
+### Using Anthropic Claude
+
+```bash
+npm run research -- --report-model claude-opus-5 --reasoning-effort high
+```
+
+### Using Google Gemini
+
+```bash
+npm run research -- --report-model gemini-2.5-pro
+```
+
+### Using Groq (OpenAI-compatible)
+
+```bash
+npm run research -- --report-model llama-3.3-70b-versatile
 ```
