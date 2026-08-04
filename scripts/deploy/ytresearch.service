@@ -1,0 +1,18 @@
+[Unit]
+Description=YTResearchAI Web Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/YouTubeResearchAI
+ExecStart=/usr/bin/node scripts/web/server.mjs
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+Environment=PORT=3000
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

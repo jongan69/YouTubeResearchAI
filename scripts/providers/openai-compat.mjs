@@ -92,6 +92,7 @@ export const createOpenAICompatProvider = (config) => {
     jsonSchema,
     schemaName,
     maxOutputTokens,
+    apiKey: overrideApiKey,
   }) =>
     withRetry(schemaName, async () => {
       const systemContent = [
@@ -101,10 +102,14 @@ export const createOpenAICompatProvider = (config) => {
         'You must respond with valid JSON matching the provided schema. Do not include any text outside the JSON.',
       ].join('\n\n');
 
+      const activeClient = overrideApiKey
+        ? new OpenAI({apiKey: overrideApiKey, baseURL: config.openaiBaseUrl, maxRetries: 0, timeout: config.openaiTimeoutMs ?? 20 * 60 * 1000})
+        : client;
+
       console.log(`Calling ${reportModel} via OpenAI-compatible endpoint...`);
 
       try {
-        const completion = await client.chat.completions.create({
+        const completion = await activeClient.chat.completions.create({
           model: reportModel,
           messages: [
             {role: 'system', content: systemContent},
@@ -139,7 +144,7 @@ export const createOpenAICompatProvider = (config) => {
           console.warn(
             'json_schema response format not supported by this endpoint; retrying with json_object...',
           );
-          const completion = await client.chat.completions.create({
+          const completion = await activeClient.chat.completions.create({
             model: reportModel,
             messages: [
               {role: 'system', content: systemContent},

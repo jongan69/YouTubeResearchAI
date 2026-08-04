@@ -36,6 +36,7 @@ export const createGoogleProvider = (config) => {
     userInput,
     jsonSchema,
     schemaName,
+    apiKey: overrideApiKey,
   }) =>
     withRetry(schemaName, async () => {
       // Convert JSON Schema to Google's OpenAPI 3.0 subset format
@@ -71,7 +72,7 @@ export const createGoogleProvider = (config) => {
       console.log(`Calling Google ${reportModel}...`);
 
       const response = await fetch(
-        `${GEMINI_BASE}/models/${reportModel}:generateContent?key=${config.googleApiKey}`,
+        `${GEMINI_BASE}/models/${reportModel}:generateContent?key=${overrideApiKey || config.googleApiKey}`,
         {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},

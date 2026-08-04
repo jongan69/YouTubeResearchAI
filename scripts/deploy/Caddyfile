@@ -1,0 +1,11 @@
+# Caddy reverse proxy — automatic HTTPS via Let's Encrypt
+# Replace ytresearch.yourdomain.com with your actual domain
+
+:80 {
+  reverse_proxy localhost:3000
+}
+
+# When you have a domain, replace the above with:
+# ytresearch.yourdomain.com {
+#   reverse_proxy localhost:3000
+# }

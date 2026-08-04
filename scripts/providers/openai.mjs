@@ -74,7 +74,12 @@ export const createOpenAIProvider = (config) => {
     jsonSchema,
     schemaName,
     maxOutputTokens,
+    apiKey: overrideApiKey,
   }) => {
+    // Use override API key if provided (BYO key per-job), otherwise default client
+    const activeClient = overrideApiKey
+      ? new OpenAI({apiKey: overrideApiKey, baseURL: config.openaiBaseUrl || undefined, maxRetries: 0, timeout: config.openaiTimeoutMs ?? 20 * 60 * 1000})
+      : client;
     const request = {
       model: reportModel,
       ...(modelSupportsReasoningEffort(reportModel)
@@ -97,7 +102,7 @@ export const createOpenAIProvider = (config) => {
     };
 
     const response = await withRetry(schemaName, () =>
-      client.responses.create(request),
+      activeClient.responses.create(request),
     );
 
     assertCompleteResponse(response, schemaName);

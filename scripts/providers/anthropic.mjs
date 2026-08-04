@@ -41,6 +41,7 @@ export const createAnthropicProvider = (config) => {
     userInput,
     jsonSchema,
     schemaName,
+    apiKey: overrideApiKey,
   }) =>
     withRetry(schemaName, async () => {
       const body = {
@@ -67,7 +68,7 @@ export const createAnthropicProvider = (config) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': config.anthropicApiKey,
+          'x-api-key': overrideApiKey || config.anthropicApiKey,
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify(body),
@@ -137,7 +138,7 @@ export const createAnthropicProvider = (config) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': config.anthropicApiKey,
+          'x-api-key': overrideApiKey || config.anthropicApiKey,
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify(body),
