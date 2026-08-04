@@ -53,7 +53,8 @@ const API = (() => {
     async getRecentJobs() {
       try {
         const r = await fetch(`${base}/api/jobs`);
-        return r.json();
+        const data = await r.json();
+        return Array.isArray(data) ? data : [];
       } catch { return []; }
     },
   };
@@ -67,11 +68,44 @@ const state = {
   eventSource: null,
 };
 
-// ---- DOM refs -------------------------------------------------------------
+// ---- DOM helpers ----------------------------------------------------------
 
 const $ = (s) => document.querySelector(s);
-const show = (el) => { el.style.display = ''; };
-const hide = (el) => { el.style.display = 'none'; };
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+const show = (el) => { if (!el) return; el.hidden = false; el.classList.remove('is-hidden'); };
+const hide = (el) => { if (!el) return; el.hidden = true; el.classList.add('is-hidden'); };
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
+  {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]
+));
+
+const SUBMIT_IDLE = `<span class="btn-sheen" aria-hidden="true"></span><span class="btn-label">Generate</span>
+  <svg class="btn-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const SUBMIT_BUSY = `<span class="spinner"></span><span class="btn-label">Working…</span>`;
+
+const setSubmitState = (busy) => {
+  const btn = $('#submit-btn');
+  if (!btn) return;
+  btn.disabled = busy;
+  btn.innerHTML = busy ? SUBMIT_BUSY : SUBMIT_IDLE;
+  $('#form-section')?.classList.toggle('is-busy', busy);
+};
+
+let toastTimer;
+const toast = (msg) => {
+  const el = $('#toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+};
+
+const setFormMsg = (msg) => {
+  const el = $('#form-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.toggle('show', Boolean(msg));
+};
 
 // ---- Markdown rendering (lightweight) --------------------------------------
 
@@ -137,6 +171,110 @@ const renderMarkdown = (md) => {
   return out.join('\n');
 };
 
+// ---- Ambient UI (reveal, counters, spotlight, nav) --------------------------
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const initAmbientUI = () => {
+  // Scroll-triggered reveals
+  const reveals = $$('.reveal');
+  if (reduceMotion || !('IntersectionObserver' in window)) {
+    reveals.forEach((el) => el.classList.add('in'));
+  } else {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      });
+    }, {threshold: .12, rootMargin: '0px 0px -60px 0px'});
+    reveals.forEach((el) => io.observe(el));
+  }
+
+  // Count-up stats
+  const counters = $$('.stat em[data-count]');
+  const runCount = (el) => {
+    const target = Number(el.dataset.count || 0);
+    const prefix = el.dataset.prefix || '';
+    const suffix = el.dataset.suffix || '';
+    const fmt = (n) => `${prefix}${Math.round(n).toLocaleString('en-US')}${suffix}`;
+    if (reduceMotion || !target) { el.textContent = fmt(target); return; }
+    const dur = 1400, t0 = performance.now();
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / dur);
+      el.textContent = fmt(target * (1 - Math.pow(1 - p, 4)));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  };
+  if ('IntersectionObserver' in window) {
+    const co = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) { runCount(e.target); co.unobserve(e.target); } });
+    }, {threshold: .5});
+    counters.forEach((el) => co.observe(el));
+  } else {
+    counters.forEach(runCount);
+  }
+
+  // Cursor spotlight on feature cards
+  if (!reduceMotion && window.matchMedia('(hover: hover)').matches) {
+    $$('.f-card').forEach((card) => {
+      card.addEventListener('pointermove', (e) => {
+        const r = card.getBoundingClientRect();
+        card.style.setProperty('--mx', `${e.clientX - r.left}px`);
+        card.style.setProperty('--my', `${e.clientY - r.top}px`);
+      });
+    });
+  }
+
+  // Nav condenses on scroll
+  const nav = $('#nav');
+  const onScroll = () => nav?.classList.toggle('scrolled', window.scrollY > 16);
+  window.addEventListener('scroll', onScroll, {passive: true});
+  onScroll();
+
+  // CTA jumps back to the console
+  $('#cta-btn')?.addEventListener('click', () => {
+    $('#form-section')?.scrollIntoView({behavior: reduceMotion ? 'auto' : 'smooth', block: 'center'});
+    setTimeout(() => $('#url-input')?.focus(), reduceMotion ? 0 : 500);
+  });
+
+  // ⌘K / Ctrl+K focuses the URL field
+  window.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      $('#url-input')?.focus();
+      $('#url-input')?.select();
+    }
+  });
+};
+
+// Segmented citation-style control, mirrored into the hidden <select>
+const initSegmented = () => {
+  const seg = $('#style-seg');
+  const select = $('#opt-style');
+  if (!seg || !select) return;
+  const glider = seg.querySelector('.seg-glider');
+  const buttons = Array.from(seg.querySelectorAll('.seg-btn'));
+
+  const moveGlider = () => {
+    const active = seg.querySelector('.seg-btn.is-active');
+    if (!active || !glider) return;
+    glider.style.setProperty('--seg-w', `${active.offsetWidth}px`);
+    glider.style.setProperty('--seg-x', `${active.offsetLeft - 3}px`);
+  };
+
+  buttons.forEach((btn) => btn.addEventListener('click', () => {
+    buttons.forEach((b) => b.classList.toggle('is-active', b === btn));
+    select.value = btn.dataset.value;
+    moveGlider();
+  }));
+
+  // Options panel starts collapsed, so measure once it has a layout box
+  new ResizeObserver(moveGlider).observe(seg);
+  moveGlider();
+};
+
 // ---- App logic ------------------------------------------------------------
 
 const init = async () => {
@@ -161,7 +299,7 @@ const init = async () => {
       const key = apiInput.value.trim();
       if (!key || key.length < 10) { keyHint.textContent = ''; return; }
       if (key === state.apiKey) { keyHint.textContent = '🔑 Saved key'; return; }
-      keyHint.textContent = '⏳ Validating...';
+      keyHint.textContent = '⏳ Validating…';
       const v = await API.validateKey(key);
       if (v.valid) {
         state.apiKey = key;
@@ -175,15 +313,15 @@ const init = async () => {
 
   // Options toggle
   optionsToggle.addEventListener('click', () => {
-    const hidden = optionsRow.style.display === 'none';
-    optionsRow.style.display = hidden ? '' : 'none';
-    optionsToggle.textContent = hidden ? '⚙️ Hide Options' : '⚙️ Options';
+    const open = optionsRow.classList.toggle('open');
+    optionsToggle.setAttribute('aria-expanded', String(open));
+    optionsToggle.querySelector('.opt-toggle-label').textContent = open ? 'Hide options' : 'Options';
   });
 
   // Submit
   const doSubmit = async () => {
     const url = urlInput.value.trim();
-    if (!url) return;
+    if (!url) { urlInput.focus(); toast('Paste a video URL first'); return; }
 
     const options = {
       research: $('#opt-research').checked,
@@ -194,15 +332,11 @@ const init = async () => {
       verbosity: 'medium',
     };
 
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner"></span> Submitting...';
+    setSubmitState(true);
     hide($('#report-section'));
     hide($('#error-section'));
     show($('#progress-section'));
-    $('#progress-stage').textContent = 'Submitting...';
-    $('#progress-pct').textContent = '0%';
-    $('#progress-bar').style.width = '0%';
-    $('#progress-msg').textContent = 'Sending job to server...';
+    setProgress({stage: 'Submitting…', progress: 0, message: 'Sending job to server…'});
 
     try {
       const key = state.apiKey || undefined;
@@ -211,23 +345,21 @@ const init = async () => {
       if (r.error) {
         if (r.freeTier) {
           const ft = r.freeTier;
-          $('#form-status').textContent = `Free tier: ${ft.remaining}/${ft.limit} remaining today (resets at midnight UTC). Add your API key above for unlimited.`;
+          setFormMsg(`Free tier: ${ft.remaining}/${ft.limit} reports remaining today (resets at midnight UTC). Add your API key above for unlimited runs.`);
         } else {
           showError(r.error);
         }
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Generate Report';
+        setSubmitState(false);
         hide($('#progress-section'));
         return;
       }
 
       state.currentJobId = r.jobId;
-      $('#form-status').textContent = '';
+      setFormMsg('');
       streamProgress(r.jobId);
     } catch (err) {
       showError(err.message || 'Failed to submit job');
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Generate Report';
+      setSubmitState(false);
       hide($('#progress-section'));
     }
   };
@@ -243,26 +375,42 @@ const init = async () => {
   $('#retry-btn').addEventListener('click', resetForm);
 };
 
+const setProgress = ({stage, progress, message}) => {
+  const pct = Math.max(0, Math.min(100, Number(progress) || 0));
+  $('#progress-stage').textContent = stage || 'Processing…';
+  $('#progress-pct').textContent = `${Math.round(pct)}%`;
+  $('#progress-bar').style.width = `${pct}%`;
+  if (message !== undefined) $('#progress-msg').textContent = message || '';
+
+  // Light up the stage markers
+  const steps = $$('#prog-steps li');
+  const nextIdx = steps.findIndex((li) => pct < Number(li.dataset.at));
+  steps.forEach((li, i) => {
+    li.classList.toggle('done', pct >= Number(li.dataset.at));
+    li.classList.toggle('active', i === nextIdx);
+  });
+};
+
 const streamProgress = (jobId) => {
   if (state.eventSource) state.eventSource.close();
 
   state.eventSource = API.streamJob(jobId,
     (data) => {
-      $('#progress-stage').textContent = data.stage || data.message || 'Processing...';
-      $('#progress-pct').textContent = `${data.progress || 0}%`;
-      $('#progress-bar').style.width = `${data.progress || 0}%`;
-      if (data.message) $('#progress-msg').textContent = data.message;
+      setProgress({
+        stage: data.stage || data.message || 'Processing…',
+        progress: data.progress || 0,
+        message: data.message,
+      });
     },
     (data) => {
-      hide($('#progress-section'));
-      $('#submit-btn').disabled = false;
-      $('#submit-btn').textContent = 'Generate Report';
+      setProgress({stage: 'Complete', progress: 100, message: 'Report ready.'});
+      setTimeout(() => hide($('#progress-section')), 450);
+      setSubmitState(false);
       showReport(data.result);
     },
     (data) => {
       showError(data.message || 'Job failed');
-      $('#submit-btn').disabled = false;
-      $('#submit-btn').textContent = 'Generate Report';
+      setSubmitState(false);
       hide($('#progress-section'));
     },
   );
@@ -270,24 +418,34 @@ const streamProgress = (jobId) => {
 
 const showReport = (result) => {
   show($('#report-section'));
-  const meta = $('#report-meta');
   const refCount = result.references?.length || 0;
   const domain = result.methodology?.domain || 'General';
-  meta.innerHTML = `<strong>${result.title || 'Research Report'}</strong> · ${refCount} sources · Domain: ${domain}`;
+  $('#report-meta').innerHTML = `
+    <span class="meta-title">${esc(result.title || 'Research Report')}</span>
+    <span class="tag">${refCount} sources</span>
+    <span class="tag">${esc(domain)}</span>
+    <span class="tag">${esc(result.methodology?.citationStyle || 'cited')}</span>`;
 
-  const content = $('#report-content');
-  content.innerHTML = renderMarkdown(result.reportMarkdown || '');
+  $('#report-content').innerHTML = renderMarkdown(result.reportMarkdown || '');
+  $('#report-section').scrollIntoView({behavior: reduceMotion ? 'auto' : 'smooth', block: 'start'});
 
-  // Scroll to report
-  $('#report-section').scrollIntoView({behavior: 'smooth'});
+  // Download + share actions
+  const stem = slugify(result.title || 'report');
+  $('#download-md').onclick = () => downloadFile(`${stem}.md`, result.reportMarkdown || '', 'text/markdown');
+  $('#download-json').onclick = () => downloadFile(`${stem}.json`, JSON.stringify(result, null, 2), 'application/json');
 
-  // Download buttons
-  $('#download-md').onclick = () => downloadFile(`${slugify(result.title || 'report')}.md`, result.reportMarkdown || '', 'text/markdown');
-  $('#download-json').onclick = () => downloadFile(`${slugify(result.title || 'report')}.json`, JSON.stringify(result, null, 2), 'application/json');
-  $('#copy-link').onclick = () => {
-    navigator.clipboard.writeText(`${location.origin}${location.pathname}?job=${state.currentJobId}`);
-    $('#copy-link').textContent = '✅ Copied!';
-    setTimeout(() => $('#copy-link').textContent = '🔗 Copy Link', 2000);
+  const copyBtn = $('#copy-link');
+  const copyLabel = copyBtn.innerHTML;
+  copyBtn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(`${location.origin}${location.pathname}?job=${state.currentJobId}`);
+      copyBtn.classList.add('done');
+      copyBtn.textContent = 'Copied';
+      toast('Share link copied to clipboard');
+      setTimeout(() => { copyBtn.classList.remove('done'); copyBtn.innerHTML = copyLabel; }, 2000);
+    } catch {
+      toast('Could not copy — check clipboard permissions');
+    }
   };
 
   loadRecentJobs();
@@ -297,6 +455,7 @@ const showError = (msg) => {
   hide($('#progress-section'));
   show($('#error-section'));
   $('#error-msg').textContent = msg;
+  $('#error-section').scrollIntoView({behavior: reduceMotion ? 'auto' : 'smooth', block: 'center'});
 };
 
 const resetForm = () => {
@@ -305,9 +464,8 @@ const resetForm = () => {
   hide($('#progress-section'));
   show($('#form-section'));
   $('#url-input').value = '';
-  $('#submit-btn').disabled = false;
-  $('#submit-btn').textContent = 'Generate Report';
-  $('#form-status').textContent = '';
+  setSubmitState(false);
+  setFormMsg('');
   $('#url-input').focus();
   if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
   // Clear share link from URL
@@ -318,21 +476,26 @@ const resetForm = () => {
 };
 
 const loadRecentJobs = async () => {
-  const jobs = await API.getRecentJobs();
-  if (!jobs.length) return;
-  show($('#recent-section'));
+  const section = $('#recent-section');
   const list = $('#recent-list');
-  list.innerHTML = jobs.slice(0, 10).map(j => `
-    <div class="recent-item">
-      <div style="display:flex;align-items:center;overflow:hidden;">
-        <span class="status-dot ${j.status === 'complete' ? 'status-complete' : j.status === 'failed' ? 'status-failed' : 'status-running'}"></span>
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.url?.replace(/^https?:\/\/(www\.)?/, '').slice(0, 60)}</span>
-      </div>
-      <span style="color:var(--muted);flex-shrink:0;margin-left:8px;font-size:.75rem;">
-        ${j.status === 'complete' ? '✅ ' + (j.result?.references?.length || 0) + ' refs' : j.status === 'failed' ? '❌ Failed' : '⏳ ' + (j.stage || 'queued')}
-      </span>
-    </div>
-  `).join('');
+  if (!section || !list) return;
+
+  const jobs = await API.getRecentJobs();
+  if (!jobs.length) { hide(section); return; }
+  show(section);
+
+  list.innerHTML = jobs.slice(0, 6).map((j) => {
+    const status = j.status === 'complete' ? 'complete' : j.status === 'failed' ? 'failed' : 'running';
+    const label = j.status === 'complete' ? `${j.result?.references?.length || 0} refs`
+      : j.status === 'failed' ? 'failed'
+      : (j.stage || 'queued');
+    const url = (j.url || '').replace(/^https?:\/\/(www\.)?/, '').slice(0, 70);
+    return `<div class="recent-item">
+      <span class="status-dot status-${status}"></span>
+      <span class="recent-url">${esc(url)}</span>
+      <span class="recent-state">${esc(label)}</span>
+    </div>`;
+  }).join('');
 };
 
 const downloadFile = (filename, content, mime) => {
@@ -342,6 +505,7 @@ const downloadFile = (filename, content, mime) => {
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click();
   document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast(`Downloaded ${filename}`);
 };
 
 const slugify = (s) => (s || 'report').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
@@ -353,18 +517,16 @@ const loadSharedJob = async () => {
   if (!jobId) return;
 
   show($('#progress-section'));
-  $('#progress-stage').textContent = 'Loading shared report...';
-  $('#progress-msg').textContent = `Job: ${jobId}`;
-  hide($('#form-section'));
+  setProgress({stage: 'Loading shared report…', progress: 0, message: `Job: ${jobId}`});
 
   try {
     const job = await API.getJob(jobId);
-    if (job.error) { showError('Report not found. It may have expired or the link is invalid.'); return; }
+    if (job.error) { hide($('#progress-section')); showError('Report not found. It may have expired or the link is invalid.'); return; }
 
     if (job.status === 'complete' && job.result) {
       hide($('#progress-section'));
       showReport(job.result);
-      // Update URL input so user can see the source
+      // Show the source URL so the visitor can see where it came from
       $('#url-input').value = job.url || '';
       return;
     }
@@ -376,12 +538,14 @@ const loadSharedJob = async () => {
 
     // Job still running — stream progress
     state.currentJobId = jobId;
-    $('#submit-btn').disabled = true;
+    setSubmitState(true);
     streamProgress(jobId);
-  } catch (e) {
+  } catch {
     showError('Could not load the shared report. The link may have expired.');
   }
 };
 
-// Boot
+// Boot — paint the page first, then resolve any ?job= share link
+initAmbientUI();
+initSegmented();
 loadSharedJob().then(() => init());

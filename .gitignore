@@ -20,3 +20,4 @@ oracle.txt
 oci_config
 .env.backup
 .env.local
+.claude/
