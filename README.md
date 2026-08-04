@@ -1,14 +1,15 @@
-# YouTube Research AI — Turn Any YouTube Video Into a PhD-Grade Research Report
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-horizontal-dark.svg">
+    <img src="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-horizontal-light.svg" alt="YouTube Research AI" width="600">
+  </picture>
+</p>
 
 **Automated academic research pipeline.** Download a YouTube video, transcribe it with word-level timestamps, search peer-reviewed literature across four academic databases, verify claims against the evidence, and generate a fully cited research report — all with one command.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen)](https://nodejs.org)
 [![Provider](https://img.shields.io/badge/AI-OpenAI%20%7C%20Anthropic%20%7C%20Google%20%7C%20Compatible-purple)](#-ai-providers)
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/.github/demo-output.png" alt="YouTube Research AI demo output showing a research report with citations" width="800">
-</p>
 
 ---
 

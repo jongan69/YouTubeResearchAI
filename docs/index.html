@@ -8,16 +8,22 @@
 <meta name="keywords" content="YouTube research, academic research, AI research assistant, literature search, citation generator, video to research paper, PhD research tool, automated literature review, evidence synthesis, transcript to paper, YouTube transcript, academic writing, research pipeline, open source research tool, AI academic tool, peer-reviewed citations, semantic scholar, arxiv, crossref, openalex">
 <meta name="author" content="YouTube Research AI">
 <meta name="robots" content="index, follow">
-<meta name="theme-color" content="#0d1117">
+<meta name="theme-color" content="#090D15">
+<link rel="icon" type="image/svg+xml" href="youtube-research-ai-favicon.svg">
+<link rel="apple-touch-icon" href="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-favicon-512.png">
 <link rel="canonical" href="https://jongan69.github.io/YouTubeResearchAI/">
 <meta property="og:title" content="YouTube Research AI — Turn Any YouTube Video Into a PhD-Grade Research Report">
 <meta property="og:description" content="Free open-source tool that downloads YouTube videos, transcribes them, searches academic databases, verifies claims, and generates cited research reports.">
+<meta property="og:image" content="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-social-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://jongan69.github.io/YouTubeResearchAI/">
 <meta property="og:site_name" content="YouTube Research AI">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="YouTube Research AI — Turn Videos Into Cited Research Reports">
 <meta name="twitter:description" content="Automated academic research pipeline. Download, transcribe, search literature, verify claims, generate cited reports. Free and open source.">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-social-card.png">
 <style>
 :root {
   --bg: #0d1117;
@@ -53,6 +59,10 @@ a:hover { text-decoration: underline; }
   background: linear-gradient(135deg, #58a6ff, #3fb950, #d2991d);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text; margin-bottom: 16px; line-height: 1.25; letter-spacing: -0.02em;
+}
+.hero-logo {
+  display: block; margin: 0 auto 24px; width: 80px; height: 80px;
+  filter: drop-shadow(0 2px 12px rgba(88,166,255,0.25));
 }
 .hero p {
   font-size: 1.05rem; color: var(--muted); max-width: 600px;
@@ -178,6 +188,7 @@ footer {
   .container { padding: 0 20px; }
   .hero { padding: 56px 16px 44px; }
   .hero h1 { font-size: 1.7rem; }
+  .hero-logo { width: 64px; height: 64px; margin-bottom: 18px; }
   .hero p { font-size: 0.95rem; }
   .badge { font-size: 0.72rem; padding: 4px 10px; }
   .section { padding: 48px 0; }
@@ -204,6 +215,7 @@ footer {
 
   .hero { padding: 40px 14px 32px; }
   .hero h1 { font-size: 1.4rem; }
+  .hero-logo { width: 56px; height: 56px; margin-bottom: 14px; }
   .hero p { font-size: 0.85rem; padding: 0 4px; }
   .hero .badge-row { gap: 5px; }
   .badge { font-size: 0.66rem; padding: 3px 8px; }
@@ -252,6 +264,7 @@ footer {
   .container { padding: 0 12px; }
   .hero { padding: 32px 10px 24px; }
   .hero h1 { font-size: 1.2rem; }
+  .hero-logo { width: 48px; height: 48px; margin-bottom: 12px; }
   .hero p { font-size: 0.78rem; }
   .badge { font-size: 0.62rem; padding: 3px 6px; }
   .section { padding: 28px 0; }
@@ -273,6 +286,12 @@ footer {
 <!-- Hero -->
 <section class="hero">
   <div class="container">
+    <img
+      src="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-mark.svg"
+      alt="YouTube Research AI"
+      class="hero-logo"
+      width="80" height="80"
+    >
     <h1>Turn Any YouTube Video Into a PhD-Grade Research Report</h1>
     <p>
       An automated academic research pipeline. Download, transcribe, search peer-reviewed literature,
