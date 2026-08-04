@@ -1,4 +1,5 @@
 import {withRetry} from './interface.mjs';
+import fs from 'node:fs';
 
 const ANTHROPIC_BASE = 'https://api.anthropic.com/v1';
 
@@ -106,6 +107,50 @@ export const createAnthropicProvider = (config) => {
   return {
     name: 'anthropic',
     supportsTranscription: false,
+    capabilities: {transcription: false, webSearch: false, vision: true},
     generateStructured,
+    // Vision: anthropic supports image content blocks
+    analyzeImages: async ({imagePaths, prompt, jsonSchema, schemaName, maxOutputTokens = 6000}) => {
+      const imageBlocks = imagePaths.map((p) => {
+        const data = fs.readFileSync(p);
+        const b64 = data.toString('base64');
+        const ext = p.split('.').pop()?.toLowerCase() || 'jpeg';
+        const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+        return {type: 'image', source: {type: 'base64', media_type: mime, data: b64}};
+      });
+
+      const body = {
+        model: reportModel,
+        max_tokens: maxOutputTokens,
+        system: 'You analyze visual frames from educational videos. Return valid JSON.',
+        messages: [{role: 'user', content: [{type: 'text', text: prompt}, ...imageBlocks]}],
+        tools: [{
+          name: schemaName || 'vision_analysis',
+          description: 'Generate structured visual analysis.',
+          input_schema: jsonSchema || {type: 'object'},
+        }],
+        tool_choice: {type: 'tool', name: schemaName || 'vision_analysis'},
+        thinking: {type: 'enabled', budget_tokens: 4000},
+      };
+
+      const response = await fetch(`${ANTHROPIC_BASE}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': config.anthropicApiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        throw Object.assign(new Error(`Anthropic vision API error ${response.status}`), {status: response.status});
+      }
+
+      const data = await response.json();
+      const toolUse = (data.content ?? []).find((block) => block.type === 'tool_use');
+      if (!toolUse?.input) throw new Error('Vision analysis: no structured output.');
+      return {outputJson: toolUse.input, outputText: JSON.stringify(toolUse.input)};
+    },
   };
 };

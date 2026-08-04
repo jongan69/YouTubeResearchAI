@@ -65,12 +65,56 @@ if (!['openai', 'openai-compat'].includes(aiProvider)) {
   }
 }
 
+// Research feature checks (optional)
+const researchEnabled = process.env.RESEARCH_ENABLED === 'true' || process.env.RESEARCH_ENABLED === '1';
+if (researchEnabled) {
+  checks.push({
+    name: 'RESEARCH_ENABLED',
+    required: false,
+    ok: true,
+  });
+
+  // Check network reachability for research APIs (non-blocking warnings)
+  const researchApis = String(
+    process.env.RESEARCH_APIS || 'arxiv,semantic_scholar,crossref,openalex',
+  ).split(',').map((s) => s.trim());
+
+  if (researchApis.includes('semantic_scholar')) {
+    const hasKey = Boolean(process.env.SEMANTIC_SCHOLAR_API_KEY);
+    checks.push({
+      name: 'SEMANTIC_SCHOLAR_API_KEY (optional, raises rate limit)',
+      required: false,
+      ok: hasKey ? 'set' : 'not set',
+      value: hasKey,
+    });
+  }
+
+  if (researchApis.includes('crossref')) {
+    const hasMailto = Boolean(process.env.RESEARCH_MAILTO);
+    checks.push({
+      name: 'RESEARCH_MAILTO (recommended for CrossRef polite pool)',
+      required: false,
+      ok: hasMailto ? 'set' : 'not set',
+      value: hasMailto,
+    });
+  }
+}
+
 console.log('YouTubeResearchAI doctor');
 console.log('========================');
 console.log(`AI provider: ${aiProvider}`);
 
 for (const check of checks) {
-  const mark = check.ok ? 'OK  ' : check.required ? 'MISS' : 'SKIP';
+  let mark;
+  if (check.ok === true || check.ok === 'set') {
+    mark = 'OK  ';
+  } else if (!check.required && (check.ok === false || check.ok === 'not set')) {
+    mark = 'INFO';
+  } else if (check.required && !check.ok) {
+    mark = 'MISS';
+  } else {
+    mark = 'SKIP';
+  }
   console.log(`${mark} ${check.name}`);
 }
 

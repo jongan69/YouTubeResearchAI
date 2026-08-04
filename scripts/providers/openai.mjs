@@ -107,10 +107,52 @@ export const createOpenAIProvider = (config) => {
     };
   };
 
+  // ---- vision / image analysis ----------------------------------------
+
+  const analyzeImages = async ({imagePaths, prompt, jsonSchema, schemaName, maxOutputTokens = 6000}) => {
+    // Read images as base64
+    const imageContents = imagePaths.map((p) => {
+      const data = fs.readFileSync(p);
+      const b64 = data.toString('base64');
+      const ext = p.split('.').pop()?.toLowerCase() || 'jpeg';
+      const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+      return `data:${mime};base64,${b64}`;
+    });
+
+    const messages = [
+      {role: 'system', content: 'You analyze visual frames from educational videos. Return valid JSON matching the schema. Do not include text outside the JSON.'},
+      {role: 'user', content: [
+        {type: 'text', text: prompt},
+        ...imageContents.map((url) => ({
+          type: 'image_url',
+          image_url: {url, detail: 'auto'},
+        })),
+      ]},
+    ];
+
+    const completion = await withRetry(schemaName || 'vision_analysis', () =>
+      client.chat.completions.create({
+        model: reportModel,
+        messages,
+        max_completion_tokens: maxOutputTokens,
+        response_format: jsonSchema ? {
+          type: 'json_schema',
+          json_schema: {name: schemaName || 'vision_analysis', strict: true, schema: jsonSchema},
+        } : {type: 'json_object'},
+      }),
+    );
+
+    const text = completion.choices?.[0]?.message?.content ?? '';
+    if (!text) throw new Error('Vision analysis: empty response.');
+    return {outputJson: JSON.parse(text), outputText: text};
+  };
+
   return {
     name: 'openai',
     supportsTranscription: true,
+    capabilities: {transcription: true, webSearch: false, vision: true},
     transcribe,
     generateStructured,
+    analyzeImages,
   };
 };

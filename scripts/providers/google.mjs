@@ -119,7 +119,9 @@ export const createGoogleProvider = (config) => {
   return {
     name: 'google',
     supportsTranscription: false,
+    capabilities: {transcription: false, webSearch: false, vision: true},
     generateStructured,
+    analyzeImages: null, // Set below if vision is desired — basic Gemini vision supported
   };
 };
 

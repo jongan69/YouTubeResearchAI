@@ -161,7 +161,9 @@ export const createOpenAICompatProvider = (config) => {
   return {
     name: 'openai-compat',
     supportsTranscription: true,
+    capabilities: {transcription: true, webSearch: false, vision: false},
     transcribe,
     generateStructured,
+    analyzeImages: null, // Most compat providers don't support vision natively
   };
 };

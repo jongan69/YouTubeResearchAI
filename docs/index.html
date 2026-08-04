@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Research AI — Turn Any YouTube Video Into a PhD-Grade Research Report</title>
+<meta name="description" content="Automated academic research pipeline. Download YouTube videos, transcribe with Whisper, search peer-reviewed literature across arXiv, Semantic Scholar, CrossRef, and OpenAlex, verify claims against evidence, and generate fully cited research reports — all with one command. Free and open source.">
+<meta name="keywords" content="YouTube research, academic research, AI research assistant, literature search, citation generator, video to research paper, PhD research tool, automated literature review, evidence synthesis, transcript to paper, YouTube transcript, academic writing, research pipeline, open source research tool, AI academic tool, peer-reviewed citations, semantic scholar, arxiv, crossref, openalex">
+<meta name="author" content="YouTube Research AI">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://jongan69.github.io/YouTubeResearchAI/">
+<meta property="og:title" content="YouTube Research AI — Turn Any YouTube Video Into a PhD-Grade Research Report">
+<meta property="og:description" content="Free open-source tool that downloads YouTube videos, transcribes them, searches academic databases, verifies claims, and generates cited research reports.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://jongan69.github.io/YouTubeResearchAI/">
+<meta property="og:site_name" content="YouTube Research AI">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="YouTube Research AI — Turn Videos Into Cited Research Reports">
+<meta name="twitter:description" content="Automated academic research pipeline. Download, transcribe, search literature, verify claims, generate cited reports. Free and open source.">
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --accent3: #d2991d;
+    --accent4: #f778ba;
+    --code-bg: #1c2128;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  /* Hero */
+  .hero {
+    text-align: center; padding: 100px 24px 80px;
+    background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero h1 {
+    font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800;
+    background: linear-gradient(135deg, #58a6ff, #3fb950, #d2991d);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 20px; line-height: 1.2;
+  }
+  .hero p {
+    font-size: 1.25rem; color: var(--muted); max-width: 640px;
+    margin: 0 auto 32px;
+  }
+  .hero .badge-row {
+    display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 32px;
+  }
+  .badge {
+    display: inline-block; padding: 6px 14px; border-radius: 20px;
+    font-size: 0.85rem; font-weight: 600; border: 1px solid var(--border);
+  }
+  .badge-accent { background: rgba(88,166,255,0.15); color: var(--accent); border-color: rgba(88,166,255,0.3); }
+  .badge-green { background: rgba(63,185,80,0.15); color: var(--accent2); border-color: rgba(63,185,80,0.3); }
+  .badge-yellow { background: rgba(210,153,29,0.15); color: var(--accent3); border-color: rgba(210,153,29,0.3); }
+  .badge-pink { background: rgba(247,119,186,0.15); color: var(--accent4); border-color: rgba(247,119,186,0.3); }
+
+  .btn {
+    display: inline-block; padding: 14px 32px; border-radius: 8px;
+    font-size: 1.05rem; font-weight: 600; transition: all 0.2s;
+  }
+  .btn-primary {
+    background: var(--accent2); color: #fff; border: none;
+  }
+  .btn-primary:hover { background: #359946; text-decoration: none; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(63,185,80,0.3); }
+  .btn-secondary {
+    background: transparent; color: var(--text); border: 1px solid var(--border);
+    margin-left: 12px;
+  }
+  .btn-secondary:hover { background: var(--surface); text-decoration: none; }
+
+  /* Features */
+  .section { padding: 80px 0; }
+  .section-alt { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .section h2 {
+    font-size: 2rem; font-weight: 700; text-align: center; margin-bottom: 16px;
+  }
+  .section .subtitle { text-align: center; color: var(--muted); max-width: 600px; margin: 0 auto 48px; font-size: 1.1rem; }
+
+  .features-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px; margin-top: 32px;
+  }
+  .feature-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 28px;
+  }
+  .feature-card h3 { font-size: 1.15rem; margin-bottom: 8px; }
+  .feature-card p { color: var(--muted); font-size: 0.95rem; }
+  .feature-icon { font-size: 1.8rem; margin-bottom: 12px; }
+
+  /* Pipeline */
+  .pipeline {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+    align-items: center; margin: 40px 0; font-size: 0.85rem;
+  }
+  .pipeline-step {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 16px; white-space: nowrap;
+    font-weight: 600; color: var(--accent);
+  }
+  .pipeline-arrow { color: var(--muted); font-size: 1.2rem; }
+
+  /* Code block */
+  .code-block {
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px 24px; overflow-x: auto;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
+    font-size: 0.9rem; line-height: 1.6; margin: 16px 0;
+    position: relative;
+  }
+  .code-block .prompt { color: var(--accent2); }
+  .code-block .flag { color: var(--accent3); }
+  .code-block .comment { color: var(--muted); }
+
+  /* Provider table */
+  table {
+    width: 100%; border-collapse: collapse; margin: 24px 0;
+  }
+  th, td {
+    text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border);
+  }
+  th { font-weight: 600; color: var(--muted); font-size: 0.85rem; text-transform: uppercase; }
+  td { font-size: 0.95rem; }
+  .check { color: var(--accent2); }
+  .cross { color: var(--muted); }
+
+  /* Stats */
+  .stats-row {
+    display: flex; gap: 48px; justify-content: center; flex-wrap: wrap;
+    margin: 40px 0;
+  }
+  .stat { text-align: center; }
+  .stat-number {
+    font-size: 2.5rem; font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .stat-label { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+
+  /* Footer */
+  footer {
+    text-align: center; padding: 48px 24px; color: var(--muted);
+    font-size: 0.9rem; border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 640px) {
+    .hero { padding: 60px 16px 48px; }
+    .section { padding: 48px 0; }
+    .btn-secondary { margin-left: 0; margin-top: 12px; }
+    .pipeline { flex-direction: column; }
+    .pipeline-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <h1>Turn Any YouTube Video Into a<br>PhD-Grade Research Report</h1>
+    <p>
+      An automated academic research pipeline. Download, transcribe, search peer-reviewed literature,
+      verify claims, and generate fully cited research reports — all with one command.
+      <strong>Free and open source.</strong>
+    </p>
+    <div class="badge-row">
+      <span class="badge badge-accent">📚 4 Academic Databases</span>
+      <span class="badge badge-green">✅ Claim Verification</span>
+      <span class="badge badge-yellow">🔬 Evidence Synthesis</span>
+      <span class="badge badge-pink">🎓 5 Domain Profiles</span>
+    </div>
+    <a href="https://github.com/jongan69/YouTubeResearchAI#quick-start" class="btn btn-primary">Get Started →</a>
+    <a href="https://github.com/jongan69/YouTubeResearchAI" class="btn btn-secondary">View on GitHub</a>
+  </div>
+</section>
+
+<!-- Stats -->
+<section class="section">
+  <div class="container">
+    <div class="stats-row">
+      <div class="stat">
+        <div class="stat-number">4</div>
+        <div class="stat-label">Academic databases searched</div>
+      </div>
+      <div class="stat">
+        <div class="stat-number">5</div>
+        <div class="stat-label">Domain-specific research profiles</div>
+      </div>
+      <div class="stat">
+        <div class="stat-number">4</div>
+        <div class="stat-label">AI providers supported</div>
+      </div>
+      <div class="stat">
+        <div class="stat-number">0</div>
+        <div class="stat-label">New npm dependencies required</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pipeline -->
+<section class="section-alt">
+  <div class="container">
+    <h2>How It Works</h2>
+    <p class="subtitle">A multi-stage research pipeline that treats video as a primary source and builds cited, verified analysis around it.</p>
+    <div class="pipeline">
+      <span class="pipeline-step">📥 Download Video</span>
+      <span class="pipeline-arrow">→</span>
+      <span class="pipeline-step">🎙️ Transcribe (Whisper)</span>
+      <span class="pipeline-arrow">→</span>
+      <span class="pipeline-step">🎯 Domain Detection</span>
+      <span class="pipeline-arrow">→</span>
+      <span class="pipeline-step">🔍 Literature Search</span>
+      <span class="pipeline-arrow">→</span>
+      <span class="pipeline-step">🧪 Evidence Synthesis</span>
+      <span class="pipeline-arrow">→</span>
+      <span class="pipeline-step">📝 Cited Report</span>
+    </div>
+  </div>
+</section>
+
+<!-- Features Grid -->
+<section class="section">
+  <div class="container">
+    <h2>Production-Grade Research Features</h2>
+    <p class="subtitle">Everything you need to turn passive video watching into active academic research.</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🔬</div>
+        <h3>Automated Literature Search</h3>
+        <p>Queries arXiv, Semantic Scholar, CrossRef, and OpenAlex simultaneously. Scores and ranks results by citation count, recency, and keyword relevance. All APIs are free — no paid subscriptions required.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">✅</div>
+        <h3>Claim Verification</h3>
+        <p>Compares every substantive claim against peer-reviewed literature. Assigns confidence levels: well-supported, plausible, contested, speculative, or opinion. Surfaces contradictions between sources.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📝</div>
+        <h3>Proper Citations</h3>
+        <p>Inline numbered references with formatted bibliography in APA, Chicago, or IEEE style. Citations are validated against fetched metadata — hallucinated references are automatically pruned. Every reference includes DOI and URL.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎓</div>
+        <h3>Domain-Aware Research</h3>
+        <p>Five academic domain profiles (Computer Science, Medicine, Social Sciences, Humanities, Natural Sciences) automatically tailor search strategies, preferred databases, and evaluation standards to the field.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔄</div>
+        <h3>Iterative Deep Research</h3>
+        <p>Multi-pass research mode identifies gaps in the literature coverage, runs targeted searches to fill them, and re-verifies claims against the expanded evidence pool. Converges when no new sources are found.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>Multi-Source Synthesis</h3>
+        <p>Cross-reference multiple videos on the same topic. Identifies consensus themes, points of disagreement, unique contributions per source, and literature gaps across all sources.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🖼️</div>
+        <h3>Visual Content Analysis</h3>
+        <p>Extract and analyze keyframes from video. Vision AI identifies equations (with LaTeX reproduction), diagrams, code snippets, data charts, and on-screen citations that never appear in the transcript.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🏗️</div>
+        <h3>Provider-Agnostic</h3>
+        <p>Works with OpenAI (GPT-5.5), Anthropic (Claude), Google (Gemini), and any OpenAI-compatible endpoint (Groq, DeepSeek, Ollama). Features degrade gracefully when unsupported by a provider.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <h3>Complete Audit Trail</h3>
+        <p>Every search query, retrieved source, and selection decision is logged to JSONL. Reports include a Research Methods section documenting the methodology, databases searched, and limitations.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎯</div>
+        <h3>Structured Research Output</h3>
+        <p>Beyond the polished Markdown article: structured JSON with executive summary, thesis, key ideas, timeline, glossary, evidence assessments, study questions, and a 7-day study plan.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🛡️</div>
+        <h3>Graceful Degradation</h3>
+        <p>Every optional feature fails gracefully. An API outage doesn't crash the pipeline — it continues with what's available and logs the issue. Backward compatible with zero-flag default behavior.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💰</div>
+        <h3>Zero Cost Research APIs</h3>
+        <p>All four academic databases are completely free. The only costs are your AI provider's standard API rates for transcription and report generation. No subscriptions, no hidden fees.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Quick Start -->
+<section class="section-alt">
+  <div class="container">
+    <h2>Quick Start</h2>
+    <p class="subtitle">Go from zero to a cited research report in under 2 minutes.</p>
+    <div class="code-block">
+      <span class="comment"># 1. Clone and install</span><br>
+      git clone https://github.com/jongan69/YouTubeResearchAI.git<br>
+      cd YouTubeResearchAI && npm install<br><br>
+      <span class="comment"># 2. Add your API key</span><br>
+      cp .env.example .env<br>
+      <span class="comment"># Edit .env: set OPENAI_API_KEY=sk-your-key</span><br><br>
+      <span class="comment"># 3. Add a YouTube URL</span><br>
+      echo "https://www.youtube.com/watch?v=VIDEO_ID" > links.txt<br><br>
+      <span class="comment"># 4. Run PhD-grade research</span><br>
+      npm run research <span class="flag">--research</span> <span class="flag">--verify</span> <span class="flag">--citation-style</span> apa
+    </div>
+  </div>
+</section>
+
+<!-- Providers -->
+<section class="section">
+  <div class="container">
+    <h2>AI Provider Support</h2>
+    <p class="subtitle">Choose any provider — the pipeline adapts automatically.</p>
+    <table>
+      <thead>
+        <tr><th>Feature</th><th>OpenAI</th><th>Anthropic</th><th>Google</th><th>OpenAI-compat</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Report Generation</td><td class="check">✅ GPT-5.5</td><td class="check">✅ Claude</td><td class="check">✅ Gemini</td><td class="check">✅ Any</td></tr>
+        <tr><td>Transcription</td><td class="check">✅ Whisper</td><td class="cross">❌ Needs OpenAI key</td><td class="cross">❌ Needs OpenAI key</td><td class="check">✅ If supported</td></tr>
+        <tr><td>Reasoning / Thinking</td><td class="check">✅ reasoning.effort</td><td class="check">✅ thinking.budget</td><td class="check">✅ thinkingConfig</td><td class="check">✅ Prompt guidance</td></tr>
+        <tr><td>Structured Output</td><td class="check">✅ json_schema strict</td><td class="check">✅ Tool use</td><td class="check">✅ response_schema</td><td class="check">✅ json_schema/json_object</td></tr>
+        <tr><td>Vision / Image Analysis</td><td class="check">✅ GPT-5 vision</td><td class="check">✅ Claude vision</td><td class="check">✅ Gemini vision</td><td class="cross">❌ Varies</td></tr>
+        <tr><td>Literature Search</td><td class="check">✅ All providers</td><td class="check">✅ All providers</td><td class="check">✅ All providers</td><td class="check">✅ All providers</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Examples -->
+<section class="section-alt">
+  <div class="container">
+    <h2>Usage Examples</h2>
+    <p class="subtitle">From basic study guide to PhD-grade research — one flag away.</p>
+
+    <h3 style="margin-top:32px;margin-bottom:8px;">Basic Study Guide</h3>
+    <div class="code-block">
+      <span class="prompt">$</span> npm run research
+    </div>
+
+    <h3 style="margin-top:24px;margin-bottom:8px;">Cited Research Report</h3>
+    <div class="code-block">
+      <span class="prompt">$</span> npm run research <span class="flag">--research</span> <span class="flag">--citation-style</span> apa <span class="flag">--max-sources</span> 10
+    </div>
+
+    <h3 style="margin-top:24px;margin-bottom:8px;">PhD-Grade Deep Research</h3>
+    <div class="code-block">
+      <span class="prompt">$</span> npm run research <span class="flag">\</span><br>
+      &nbsp;&nbsp;<span class="flag">--research</span> <span class="flag">--research-depth</span> deep <span class="flag">--verify</span> <span class="flag">\</span><br>
+      &nbsp;&nbsp;<span class="flag">--citation-style</span> apa <span class="flag">--max-sources</span> 20 <span class="flag">\</span><br>
+      &nbsp;&nbsp;<span class="flag">--reasoning-effort</span> high <span class="flag">--verbosity</span> high <span class="flag">\</span><br>
+      &nbsp;&nbsp;<span class="flag">--max-output-tokens</span> 32000
+    </div>
+
+    <h3 style="margin-top:24px;margin-bottom:8px;">Multi-Source Synthesis</h3>
+    <div class="code-block">
+      <span class="prompt">$</span> <span class="comment"># links.txt contains 2+ related videos</span><br>
+      <span class="prompt">$</span> npm run research <span class="flag">--research</span> <span class="flag">--verify</span> <span class="flag">--synthesis</span>
+    </div>
+
+    <h3 style="margin-top:24px;margin-bottom:8px;">Visual Analysis + Research</h3>
+    <div class="code-block">
+      <span class="prompt">$</span> npm run research <span class="flag">--research</span> <span class="flag">--vision</span> <span class="flag">--max-frames</span> 30
+    </div>
+  </div>
+</section>
+
+<!-- Output -->
+<section class="section">
+  <div class="container">
+    <h2>What You Get</h2>
+    <p class="subtitle">Every run produces a complete research package.</p>
+    <div class="code-block">
+      outputs/run-YYYY-MM-DD-HHMMSS/<br>
+      ├── transcripts/<br>
+      │   ├── video.<span class="accent">transcript.json</span>    <span class="comment"># Whisper verbose_json</span><br>
+      │   ├── video.<span class="accent">transcript.txt</span>    <span class="comment"># Plain text</span><br>
+      │   └── video.<span class="accent">timestamped.md</span>    <span class="comment"># [HH:MM:SS] markers</span><br>
+      ├── reports/<br>
+      │   ├── video.<span class="accent">research.json</span>     <span class="comment"># Structured data</span><br>
+      │   └── video.<span class="accent">research.md</span>       <span class="comment"># Polished article ✨</span><br>
+      ├── research/<br>
+      │   ├── <span class="accent">search-queries.jsonl</span>   <span class="comment"># Full audit trail</span><br>
+      │   └── <span class="accent">sources.json</span>           <span class="comment"># All retrieved sources</span><br>
+      ├── frames/                    <span class="comment"># (--vision)</span><br>
+      └── synthesis/                 <span class="comment"># (--synthesis)</span>
+    </div>
+    <p style="text-align:center;margin-top:24px;">
+      <strong>The research report includes:</strong> Executive summary, core thesis, detailed summary, key ideas with explanations, timeline, glossary, memorable quotes, claims to verify, evidence quality assessments, peer-reviewed citations, formatted reference list, research methods, study questions, practical applications, follow-up research, and a 7-day study plan.
+    </p>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="section-alt" style="text-align:center;">
+  <div class="container">
+    <h2>From Passive Watching to Active Research</h2>
+    <p class="subtitle">One command. No subscriptions. Fully open source.</p>
+    <a href="https://github.com/jongan69/YouTubeResearchAI#quick-start" class="btn btn-primary" style="margin-top:16px;">Get Started on GitHub →</a>
+    <p style="margin-top:16px;color:var(--muted);font-size:0.9rem;">
+      Star the repo • Report issues • Submit PRs • Spread the word
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>
+      <strong>YouTube Research AI</strong> — MIT License •
+      <a href="https://github.com/jongan69/YouTubeResearchAI">GitHub</a> •
+      <a href="https://github.com/jongan69/YouTubeResearchAI#readme">Documentation</a>
+    </p>
+    <p style="margin-top:8px;">
+      Built for lifelong learners, academic researchers, and the insatiably curious.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

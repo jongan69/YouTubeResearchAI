@@ -81,6 +81,66 @@ export const buildConfig = (args = {}) => {
     googleMaxOutputTokens: process.env.GOOGLE_MAX_OUTPUT_TOKENS
       ? Number(process.env.GOOGLE_MAX_OUTPUT_TOKENS)
       : undefined,
+
+    // ---- Research (Phase 1) -----------------------------------------------
+    researchEnabled: resolveBool(
+      args.research ?? process.env.RESEARCH_ENABLED ?? false,
+    ),
+    researchTopics: resolveList(args['research-topics'] ?? process.env.RESEARCH_TOPICS),
+    maxSources: Number(
+      args['max-sources'] ?? process.env.RESEARCH_MAX_SOURCES ?? 10,
+    ),
+    maxPapersPerTopic: Number(
+      args['max-papers-per-topic'] ?? process.env.RESEARCH_MAX_PAPERS_PER_TOPIC ?? 5,
+    ),
+    researchApis: resolveList(
+      args['research-apis'] ?? process.env.RESEARCH_APIS ?? 'arxiv,semantic_scholar,crossref,openalex',
+    ),
+    researchMailto: process.env.RESEARCH_MAILTO ?? undefined,
+    researchCacheDir: process.env.RESEARCH_CACHE_DIR ?? undefined,
+    researchTimeoutMs: Number(process.env.RESEARCH_TIMEOUT_MS ?? 15000),
+    semanticScholarApiKey: process.env.SEMANTIC_SCHOLAR_API_KEY ?? undefined,
+    citationStyle: String(
+      args['citation-style'] ?? process.env.CITATION_STYLE ?? 'apa',
+    ).toLowerCase(),
+
+    // ---- Phase 2: Evidence Synthesis ----------------------------------------
+    verifyEnabled: resolveBool(
+      args.verify ?? process.env.VERIFY_ENABLED ?? false,
+    ),
+
+    // ---- Phase 3: Domain Scaffolding ----------------------------------------
+    domain: String(
+      args.domain ?? process.env.DOMAIN ?? '',
+    ).toLowerCase() || null,  // null = auto-detect
+
+    // ---- Phase 4: Multi-Source Synthesis ------------------------------------
+    synthesisEnabled: resolveBool(
+      args.synthesis ?? process.env.SYNTHESIS ?? false,
+    ),
+
+    // ---- Phase 5: Vision Analysis -------------------------------------------
+    visionEnabled: resolveBool(
+      args.vision ?? process.env.VISION_ENABLED ?? false,
+    ),
+    maxFrames: Number(
+      args['max-frames'] ?? process.env.MAX_FRAMES ?? 20,
+    ),
+    framesPerMinute: Number(
+      args['frames-per-minute'] ?? process.env.FRAMES_PER_MINUTE ?? 1,
+    ),
+
+    // ---- Phase 6: Iterative Research ----------------------------------------
+    researchDepth: String(
+      args['research-depth'] ?? process.env.RESEARCH_DEPTH ?? (
+        resolveBool(args.research ?? process.env.RESEARCH_ENABLED ?? false)
+          ? 'medium'
+          : 'none'
+      ),
+    ).toLowerCase(),
+    maxResearchIterations: Number(
+      args['research-iterations'] ?? process.env.RESEARCH_ITERATIONS ?? 3,
+    ),
   };
 
   return config;
@@ -117,6 +177,24 @@ const resolveDefaultMaxTokens = (provider) => {
     default:
       return 12000;
   }
+};
+
+/** Coerce a value to boolean. Accepts "true", "1", true, 1. */
+const resolveBool = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') return value.toLowerCase() === 'true' || value === '1';
+  return false;
+};
+
+/** Split a comma-separated string into a trimmed array, filtering empties. */
+const resolveList = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
+  return String(value)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 };
 
 const resolveDefaultChunkChars = (provider, args) => {

@@ -1,194 +1,476 @@
-# YouTubeResearchAI
+# YouTube Research AI — Turn Any YouTube Video Into a PhD-Grade Research Report
 
-A learning-focused fork of ClipCaptionAI. Drop YouTube links into `links.txt`, run one command, and get downloaded source video, timestamped transcript, structured JSON, and a deep research report based on the material.
+**Automated academic research pipeline.** Download a YouTube video, transcribe it with word-level timestamps, search peer-reviewed literature across four academic databases, verify claims against the evidence, and generate a fully cited research report — all with one command.
 
-This is for studying lectures, interviews, podcasts, tutorials, sermons, essays, debates, and long-form educational videos.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen)](https://nodejs.org)
+[![Provider](https://img.shields.io/badge/AI-OpenAI%20%7C%20Anthropic%20%7C%20Google%20%7C%20Compatible-purple)](#-ai-providers)
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/.github/demo-output.png" alt="YouTube Research AI demo output showing a research report with citations" width="800">
+</p>
+
+---
+
+## What It Does
+
+YouTube Research AI transforms passive video watching into **active academic research**. It's not a summarizer — it's a full research pipeline that treats a video as a primary source and builds a cited, verified research report around it.
+
+### The Pipeline
+
+```
+YouTube URL → Download (yt-dlp) → Extract Audio (ffmpeg) → Transcribe (Whisper) 
+  → Domain Detection → Literature Search (arXiv, Semantic Scholar, CrossRef, OpenAlex) 
+  → Evidence Synthesis → Claim Verification → Deep Research Iterations 
+  → Cited Report Generation → Reference Formatting
+```
+
+### Output Per Video
+
+| Output File | Contents |
+|---|---|
+| `transcripts/<slug>.transcript.json` | Full transcription with word-level timestamps |
+| `transcripts/<slug>.transcript.txt` | Plain text transcript |
+| `transcripts/<slug>.timestamped.md` | Timestamped transcript with `[HH:MM:SS]` markers |
+| `reports/<slug>.research.json` | Structured research data (JSON) |
+| `reports/<slug>.research.md` | **Polished standalone research article with citations** |
+| `research/search-queries.jsonl` | Audit log of every academic search query |
+| `research/sources.json` | All retrieved and selected sources |
+| `synthesis/synthesis.md` | Cross-source synthesis (multi-video mode) |
+
+### What the Report Contains
+
+- **Executive summary** with key findings
+- **Core thesis** extracted from the material
+- **Detailed summary** of all substantive content
+- **Key ideas** with explanations and significance
+- **Timeline** of important moments with timestamps
+- **Glossary** of technical terms and definitions
+- **Memorable quotes** preserved verbatim
+- **Claims to verify** — flagging assertions needing evidence
+- **Peer-reviewed citations** — inline numbered references to academic sources
+- **Evidence quality assessment** — confidence level per claim (well-supported, plausible, contested, speculative, opinion)
+- **Source quality rating** — overall epistemic quality of the source material
+- **Literature gap analysis** — what the academic literature covers that the video misses
+- **Research methods section** — describing how the automated research was conducted
+- **Formatted reference list** — APA, Chicago, or IEEE style
+- **Study questions** and **practical applications**
+- **Follow-up research** recommendations
+- **7-day study plan** for deep learning
+
+---
 
 ## Quick Start
 
+### Prerequisites
+
+- **Node.js 22+** — [Download](https://nodejs.org)
+- **yt-dlp** — `brew install yt-dlp` (macOS) or `pip install yt-dlp`
+- **ffmpeg** — `brew install ffmpeg` (macOS) or `apt install ffmpeg`
+- **An AI provider API key** — OpenAI, Anthropic, Google, or OpenAI-compatible
+
+### Install
+
 ```bash
-cd /Users/jonathangan/Desktop/YouTubeResearchAI
+git clone https://github.com/jongan69/YouTubeResearchAI.git
+cd YouTubeResearchAI
 npm install
 cp .env.example .env
 ```
 
-### Choose your AI provider
+### Configure
 
-Edit `.env` to pick your AI provider and add your API key:
+Edit `.env` with your AI provider API key:
 
-**OpenAI** (default):
 ```env
+# OpenAI (recommended for full feature set)
 AI_PROVIDER=openai
-OPENAI_API_KEY=sk-your-openai-key-here
+OPENAI_API_KEY=sk-your-key-here
+
+# Or Anthropic Claude
+# AI_PROVIDER=anthropic
+# ANTHROPIC_API_KEY=sk-ant-your-key-here
+# OPENAI_API_KEY=sk-your-key-here  # needed for Whisper transcription
+
+# Or Google Gemini
+# AI_PROVIDER=google
+# GOOGLE_API_KEY=your-key-here
+# OPENAI_API_KEY=sk-your-key-here  # needed for Whisper transcription
+
+# Or any OpenAI-compatible endpoint (Groq, DeepSeek, Ollama, etc.)
+# AI_PROVIDER=openai-compat
+# OPENAI_API_KEY=your-key-here
+# OPENAI_BASE_URL=https://api.groq.com/openai/v1
 ```
 
-**Anthropic Claude** (transcription requires an OpenAI key too):
-```env
-AI_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
-OPENAI_API_KEY=sk-your-openai-key-here  # needed for transcription
-```
-
-**Google Gemini** (transcription requires an OpenAI key too):
-```env
-AI_PROVIDER=google
-GOOGLE_API_KEY=your-google-api-key-here
-OPENAI_API_KEY=sk-your-openai-key-here  # needed for transcription
-```
-
-**OpenAI-compatible** (Groq, DeepSeek, Ollama, etc.):
-```env
-AI_PROVIDER=openai-compat
-OPENAI_API_KEY=your-api-key-here
-OPENAI_BASE_URL=https://api.groq.com/openai/v1
-```
-
-Put one YouTube URL per line in `links.txt`, then run:
+### Run
 
 ```bash
+# Add YouTube URLs to links.txt (one per line)
+echo "https://www.youtube.com/watch?v=VIDEO_ID" > links.txt
+
+# Basic run — transcript + study-guide report
 npm run research
+
+# PhD-grade research — full literature search + citations + evidence verification
+npm run research -- --research --verify
+
+# Maximum depth — deep iterative research with all features
+npm run research -- --research --research-depth deep --verify --citation-style apa --max-sources 20
 ```
 
-Or double-click `RUN.command`.
+Or double-click `RUN.command` on macOS.
 
-## Output
-
-Every run creates a new folder:
-
-```text
-outputs/run-YYYY-MM-DD-HHMMSS/
-  links.txt
-  manifest.json
-  downloads/
-    video-title [id].mp4
-  transcripts/
-    video-slug.transcript.json
-    video-slug.transcript.txt
-    video-slug.timestamped.md
-  reports/
-    video-slug.research.json
-    video-slug.research.md
-```
-
-## What The Report Includes
-
-- Executive summary
-- Detailed summary
-- Core thesis
-- Key ideas with explanations
-- Timeline of important moments
-- Terms and glossary
-- Memorable quotes
-- Claims worth verifying
-- Study questions
-- Practical applications
-- Follow-up reading/search topics
-- 7-day study plan
-
-## Supported AI Providers
-
-| Provider | Report Generation | Transcription | API Key(s) |
-|---|---|---|---|
-| **OpenAI** | Responses API (GPT-5.5, etc.) | Whisper | `OPENAI_API_KEY` |
-| **Anthropic** | Messages API (Claude) | ❌ (needs OpenAI) | `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` |
-| **Google** | Gemini API | ❌ (needs OpenAI) | `GOOGLE_API_KEY` + `OPENAI_API_KEY` |
-| **OpenAI-compat** | Chat Completions (Groq, DeepSeek, Ollama, etc.) | Whisper (if supported) | `OPENAI_API_KEY` + `OPENAI_BASE_URL` |
-
-### Feature mapping
-
-| OpenAI Feature | Anthropic | Google | OpenAI-compat |
-|---|---|---|---|
-| Reasoning effort | Extended thinking budget | thinkingConfig | System prompt guidance |
-| Text verbosity | System prompt instruction | System prompt instruction | System prompt instruction |
-| JSON structured output | Tool use with tool_choice | response_schema | json_schema / json_object |
-
-## Commands
+### Verify Setup
 
 ```bash
 npm run doctor
-npm run research
-npm run research -- --links "/path/to/links.txt"
-npm run research -- --run-name my-study-run
-npm run research -- --report-model gpt-5.5
-npm run research -- --reasoning-effort medium --verbosity medium
-npm run research -- --transcription-model whisper-1
-npm run research -- --transcript "outputs/run-.../transcripts/video.timestamped.md"
 ```
 
-Useful options:
+---
 
-| Option | Meaning |
-| --- | --- |
-| `--links FILE` | Links file. Defaults to `./links.txt`. |
-| `--out-dir DIR` | Output root. Defaults to `outputs`. |
-| `--run-name NAME` | Custom run folder name. |
-| `--download-dir DIR` | Reuse or override the download folder. |
-| `--ai-provider ID` | Override `AI_PROVIDER` from .env. |
-| `--transcription-model ID` | Transcription model. Default from env or `whisper-1`. |
-| `--transcription-provider ID` | Override `TRANSCRIPTION_PROVIDER` from .env. |
-| `--report-model ID` | Report model. Default depends on provider. |
-| `--reasoning-effort LEVEL` | `low`, `medium`, or `high`. Behavior varies by provider. |
-| `--verbosity LEVEL` | `low`, `medium`, or `high`. Behavior varies by provider. |
-| `--max-output-tokens N` | Report token budget. Default varies by provider. |
-| `--report-chunk-chars N` | Chunk transcript only above this size. Default: 100000 for large-context models, 18000 otherwise. |
-| `--prompt TEXT` | Extra transcription context for names, jargon, or acronyms. |
-| `--chunk-seconds N` | Audio chunk size for long videos. Default: `180`. |
-| `--transcript FILE` | Generate a report from an existing transcript without downloading or transcribing again. |
-| `--title TEXT` | Optional report title when using `--transcript`. |
-| `--source TEXT` | Optional source URL/path when using `--transcript`. |
-| `--skip-download` | Treat each link line as an already-downloaded local video path. |
-| `--no-report` | Download and transcribe only. |
+## Features
 
-## Resume After A Report Failure
+### 🔬 Automated Literature Research
 
-If download/transcription succeeded but report generation failed, reuse the saved transcript:
+The system searches **four free academic databases** simultaneously for every claim in the video:
+
+| Database | Coverage | Authentication |
+|---|---|---|
+| **arXiv** | CS, physics, math, statistics preprints | None (polite pool) |
+| **Semantic Scholar** | 200M+ papers across all disciplines | Free API key (optional, raises rate limit) |
+| **CrossRef** | 150M+ peer-reviewed journal articles, proceedings, chapters | None (polite pool with mailto) |
+| **OpenAlex** | 250M+ works, broadest open-access coverage | None |
+
+**How it works:**
+1. **Query planning** — The LLM extracts 3–6 researchable topics from the transcript and generates 2–3 precise academic search queries per topic
+2. **Parallel search** — Queries are sent to all enabled databases with controlled concurrency
+3. **Deduplication and scoring** — Results are merged by DOI, scored by citation count + recency + keyword relevance
+4. **Source injection** — Selected papers are injected into the report prompt so the LLM can cite them inline
+5. **Citation validation** — Inline `[S1]`…`[Sn]` markers are validated against the fetched metadata; hallucinated citations are pruned
+6. **Reference formatting** — A formatted bibliography is appended in APA, Chicago, or IEEE style
+
+### 🧪 Evidence Synthesis & Claim Verification
+
+With `--verify`, each claim extracted from the video is compared against the retrieved literature:
+
+- **Well-supported** ✅ — Multiple papers agree
+- **Plausible** 🟡 — Consistent with literature but not directly tested
+- **Contested** ⚠️ — Literature shows genuine disagreement
+- **Speculative** ❓ — No evidence found in retrieved sources
+- **Opinion** 💬 — Normative claim, not empirically verifiable
+
+Supporting and contradicting sources are listed per claim, and an **Evidence Quality Assessment** section is appended to the report.
+
+### 🎓 Domain-Specific Research
+
+Five academic domain profiles automatically tailor the research strategy:
+
+| Domain | Detection Triggers | Preferred APIs | Evaluation Standards |
+|---|---|---|---|
+| **Computer Science** | algorithm, API, Rust, React, ML, GPU… | arXiv, Semantic Scholar | Peer-reviewed proceedings, benchmark rigor, reproducibility |
+| **Medicine** | clinical, diagnosis, RCT, trial, drug… | Semantic Scholar, CrossRef | Evidence hierarchy, sample size, conflicts of interest |
+| **Social Sciences** | economics, psychology, policy, survey… | CrossRef, Semantic Scholar | Causal identification, sample representativeness, replication |
+| **Humanities** | philosophy, history, ethics, discourse… | CrossRef, OpenAlex | Primary source engagement, interpretive framework awareness |
+| **Natural Sciences** | physics, chemistry, biology, genetics… | arXiv, Semantic Scholar | Experimental design, measurement precision, replication status |
+
+Domain detection is automatic based on keyword density in the transcript. Force a domain with `--domain computer-science`.
+
+### 🔄 Deep Iterative Research
+
+`--research-depth deep` enables multi-pass research:
+
+1. **Initial search** — standard literature retrieval
+2. **Gap analysis** — identify low-confidence claims and literature gaps
+3. **Targeted re-search** — new queries for gaps
+4. **Re-verification** — expanded evidence synthesis with all sources
+5. **Convergence** — stops when no new sources are found or max iterations reached
+
+### 📊 Multi-Source Synthesis
+
+With `--synthesis` and 2+ videos in `links.txt`, the system generates a cross-source synthesis report identifying:
+
+- **Consensus themes** — where sources agree
+- **Contradictions** — where sources disagree
+- **Literature gaps** — important topics no source covers
+- **Unique contributions** — what each source adds
+
+### 🖼️ Visual Content Analysis
+
+With `--vision`, keyframes are extracted from the video and analyzed by vision-capable AI:
+
+- **Equations** — reproduced in LaTeX where possible
+- **Diagrams** — described structurally
+- **Code** — language and key operations identified
+- **Charts and tables** — data extracted and contextualized
+- **On-screen citations** — transcribed exactly
+
+Requires a vision-capable model (GPT-5.5, Claude, Gemini). Automatically skipped for providers without vision support.
+
+### 🏗️ Provider-Agnostic Architecture
+
+All four AI providers are supported with feature parity where the provider allows:
+
+| Feature | OpenAI | Anthropic | Google | OpenAI-compat |
+|---|---|---|---|---|
+| Report generation | ✅ GPT-5.5 | ✅ Claude | ✅ Gemini | ✅ Groq, DeepSeek, Ollama |
+| Transcription | ✅ Whisper | ❌ (needs OpenAI key) | ❌ (needs OpenAI key) | ✅ (if supported) |
+| Reasoning/thinking | ✅ `reasoning.effort` | ✅ `thinking.budget_tokens` | ✅ `thinkingConfig` | ✅ System prompt guidance |
+| Structured output | ✅ `json_schema` strict | ✅ Tool use + `tool_choice` | ✅ `response_schema` | ✅ `json_schema` / `json_object` fallback |
+| Vision (Phase 5) | ✅ `image_url` base64 | ✅ `image` content blocks | 🚧 Planned | ❌ (env override available) |
+| Zero new dependencies | ✅ `openai` SDK only | ✅ `fetch()` only | ✅ `fetch()` only | ✅ `openai` SDK only |
+
+---
+
+## Complete CLI Reference
+
+### Core Options
+
+| Flag | Env Var | Default | Description |
+|---|---|---|---|
+| `--links FILE` | — | `./links.txt` | File with YouTube URLs (one per line) |
+| `--out-dir DIR` | — | `./outputs` | Output root directory |
+| `--run-name NAME` | — | `run-YYYY-MM-DD-HHMMSS` | Custom run folder name |
+| `--ai-provider ID` | `AI_PROVIDER` | `openai` | `openai`, `anthropic`, `google`, `openai-compat` |
+| `--transcription-model ID` | `OPENAI_TRANSCRIPTION_MODEL` | `whisper-1` | Transcription model |
+| `--report-model ID` | — | Provider default | Report generation model |
+| `--reasoning-effort LEVEL` | `OPENAI_REASONING_EFFORT` | `medium` | `low`, `medium`, `high` |
+| `--verbosity LEVEL` | `OPENAI_TEXT_VERBOSITY` | `medium` | `low`, `medium`, `high` |
+| `--max-output-tokens N` | — | Provider default | Report output token budget |
+| `--transcript FILE` | — | — | Generate report from existing transcript |
+| `--title TEXT` | — | — | Report title (with `--transcript`) |
+| `--skip-download` | — | — | Treat links as local video paths |
+| `--no-report` | — | — | Download and transcribe only |
+
+### Research Options
+
+| Flag | Env Var | Default | Description |
+|---|---|---|---|
+| `--research` | `RESEARCH_ENABLED` | off | Enable literature search + citations |
+| `--research-depth LEVEL` | `RESEARCH_DEPTH` | `medium` | `none`, `light`, `medium`, `deep` |
+| `--research-topics "a; b"` | `RESEARCH_TOPICS` | auto | Semicolon-separated topics |
+| `--max-sources N` | `RESEARCH_MAX_SOURCES` | 10 | Sources to cite in report |
+| `--max-papers-per-topic N` | `RESEARCH_MAX_PAPERS_PER_TOPIC` | 5 | Papers per query per source |
+| `--research-apis LIST` | `RESEARCH_APIS` | all four | `arxiv,semantic_scholar,crossref,openalex` |
+| `--citation-style STYLE` | `CITATION_STYLE` | `apa` | `apa`, `chicago`, `ieee` |
+| `--verify` | `VERIFY_ENABLED` | off | Evidence synthesis + claim verification |
+| `--domain ID` | `DOMAIN` | auto | Force domain profile |
+| `--synthesis` | `SYNTHESIS` | off | Cross-source synthesis (2+ videos) |
+| `--vision` | `VISION_ENABLED` | off | Visual frame analysis |
+| `--max-frames N` | `MAX_FRAMES` | 20 | Max frames to extract |
+| `--research-iterations N` | `RESEARCH_ITERATIONS` | 3 | Max deep research iterations |
+
+### Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `AI_PROVIDER` | No (default: `openai`) | `openai`, `anthropic`, `google`, `openai-compat` |
+| `OPENAI_API_KEY` | For OpenAI / transcription | OpenAI API key |
+| `OPENAI_BASE_URL` | For openai-compat | Compatible endpoint URL |
+| `ANTHROPIC_API_KEY` | For Anthropic | Anthropic API key |
+| `GOOGLE_API_KEY` | For Google | Google Gemini API key |
+| `SEMANTIC_SCHOLAR_API_KEY` | No (optional) | Raises rate limit from 100 to 1000 req/5min |
+| `RESEARCH_MAILTO` | No (recommended) | CrossRef polite pool identification |
+| `CITATION_STYLE` | No (default: `apa`) | Citation formatting style |
+
+---
+
+## Examples
+
+### Basic: Study Guide from a Lecture
+
+```bash
+npm run research
+```
+
+Generates a polished standalone article with executive summary, key ideas, glossary, study questions, and a 7-day study plan.
+
+### Research: Cited Report with Peer-Reviewed Sources
+
+```bash
+npm run research -- --research --citation-style apa --max-sources 10
+```
+
+Searches arXiv, Semantic Scholar, CrossRef, and OpenAlex for relevant papers, injects 10 best sources, and generates a cited report with APA-formatted reference list.
+
+### Deep: PhD-Grade Research with Evidence Verification
 
 ```bash
 npm run research -- \
-  --transcript "outputs/run-2026-07-05-023714/transcripts/clean-code-horrible-performance-td5nrevftbu.timestamped.md" \
-  --title "Clean Code, Horrible Performance"
+  --research \
+  --research-depth deep \
+  --verify \
+  --citation-style apa \
+  --max-sources 20 \
+  --reasoning-effort high \
+  --verbosity high \
+  --max-output-tokens 32000
 ```
 
-This creates a new report-only run and avoids paying for transcription again.
+Multi-pass iterative research with evidence synthesis, confidence levels per claim, and maximum academic rigor.
 
-## Notes
-
-The report is based on the transcript. It can identify claims worth checking, but it does not automatically browse the web or verify external facts.
-
-## Report Quality
-
-The report generator defaults to `gpt-5.5` through the Responses API. It uses structured outputs for reliable JSON plus a polished Markdown article. The default `medium` reasoning and `medium` verbosity settings are meant to create high-grade, readable article-style reports without turning every video into an overly long white paper.
-
-Reports are written as standalone documents. They should explain the subject directly and provide maximum value without requiring the reader to watch the source video or know that the report came from a transcript.
-
-For GPT-5.5, the app keeps most normal-length transcripts intact instead of pre-summarizing them first. That usually produces better standalone articles because the final model can reason over the original material directly.
-
-For more exhaustive teaching-style reports:
+### Multi-Source: Synthesize Across Multiple Videos
 
 ```bash
-npm run research -- --reasoning-effort high --verbosity high --max-output-tokens 32000
+# links.txt contains 2+ related videos
+npm run research -- --research --verify --synthesis
 ```
 
-For cheaper/faster reports:
+Generates individual cited reports plus a cross-source synthesis identifying consensus, disagreements, and gaps.
+
+### Visual: Analyze Slides, Code, and Equations
 
 ```bash
-npm run research -- --report-model gpt-5.4-mini --reasoning-effort low --verbosity medium
+npm run research -- --research --vision --max-frames 30
 ```
 
-### Using Anthropic Claude
+Extracts keyframes from the video, analyzes visual content (equations, diagrams, code, charts), and integrates findings into the report.
+
+### Resume: Report from Saved Transcript
 
 ```bash
-npm run research -- --report-model claude-opus-5 --reasoning-effort high
+npm run research -- \
+  --transcript "outputs/run-2026-08-04-065333/transcripts/my-video.timestamped.md" \
+  --title "My Research Topic" \
+  --research --verify
 ```
 
-### Using Google Gemini
+Reuses an existing transcript without re-downloading or re-transcribing.
+
+### Provider-Specific
 
 ```bash
-npm run research -- --report-model gemini-2.5-pro
+# Anthropic Claude with high thinking budget
+npm run research -- --ai-provider anthropic --report-model claude-opus-5 --reasoning-effort high
+
+# Google Gemini
+npm run research -- --ai-provider google --report-model gemini-2.5-pro
+
+# Groq (fast Llama)
+npm run research -- --ai-provider openai-compat --report-model llama-3.3-70b-versatile
 ```
 
-### Using Groq (OpenAI-compatible)
+---
 
-```bash
-npm run research -- --report-model llama-3.3-70b-versatile
+## Output Structure
+
 ```
+outputs/run-YYYY-MM-DD-HHMMSS/
+├── links.txt                          # Copy of input links
+├── manifest.json                      # Full run metadata
+├── downloads/
+│   └── Video Title [videoId].mp4      # Downloaded video + .info.json
+├── transcripts/
+│   ├── video-slug.transcript.json     # Whisper verbose_json (word timestamps)
+│   ├── video-slug.transcript.txt      # Plain text
+│   └── video-slug.timestamped.md      # Timestamped markdown
+├── reports/
+│   ├── video-slug.research.json       # Structured research data
+│   └── video-slug.research.md         # Polished standalone article
+├── research/                          # (--research enabled)
+│   ├── search-queries.jsonl           # Every search query logged
+│   └── sources.json                   # Retrieved + selected sources
+├── frames/                            # (--vision enabled)
+│   └── video-slug/
+│       ├── frame-001.jpg
+│       └── frame-002.jpg
+└── synthesis/                         # (--synthesis enabled)
+    ├── synthesis.json
+    └── synthesis.md
+```
+
+---
+
+## Architecture
+
+```
+scripts/
+├── process-links.mjs          # Pipeline conductor
+├── ai-config.mjs              # Configuration resolution (env + CLI)
+├── doctor.mjs                 # Environment validation
+├── lib.mjs                    # Utilities (slugify, timestamp, args parser)
+├── prompts/
+│   └── index.mjs              # All LLM schemas and prompt builders
+├── domains/
+│   └── index.mjs              # 5 domain profiles with auto-detection
+├── providers/
+│   ├── interface.mjs          # Provider factory + retry logic
+│   ├── openai.mjs             # OpenAI (Responses API + vision)
+│   ├── anthropic.mjs          # Anthropic (Messages API + thinking + vision)
+│   ├── google.mjs             # Google (Gemini API)
+│   └── openai-compat.mjs      # OpenAI-compatible (Groq, DeepSeek, Ollama)
+└── research/
+    ├── index.mjs              # Research orchestrator
+    ├── citation-manager.mjs   # Reference tracking + formatting
+    ├── literature-search.mjs  # 4 academic API adapters
+    ├── evidence-synthesis.mjs # Claim verification engine
+    ├── iterative-research.mjs # Deep multi-pass research
+    ├── synthesis.mjs          # Cross-source synthesis
+    ├── vision-analysis.mjs    # Frame extraction + vision AI
+    └── provenance.mjs         # JSONL audit logging
+```
+
+**Design principles:**
+- **Zero new npm dependencies** — everything uses Node.js built-in `fetch()` and the existing `openai` SDK
+- **All external APIs are free** — arXiv, Semantic Scholar, CrossRef, OpenAlex require no payment
+- **Provider-agnostic** — every LLM feature degrades gracefully when unsupported
+- **Strictly additive** — default behavior is byte-compatible with the original tool
+- **Graceful degradation** — any optional feature failing does not crash the pipeline
+
+---
+
+## Cost Estimates
+
+| Mode | Transcription | LLM Passes | Research APIs | Approximate Cost (OpenAI) |
+|---|---|---|---|---|
+| Basic (no flags) | 1× Whisper | 1× GPT-5.5 | None | ~$0.10–0.30/video |
+| Research (`--research`) | 1× Whisper | 2× GPT-5.5 (query plan + report) | 15–30 free API calls | ~$0.20–0.60/video |
+| Research + Verify (`--research --verify`) | 1× Whisper | 3× GPT-5.5 | 15–30 free API calls | ~$0.30–0.90/video |
+| Deep (`--research-depth deep`) | 1× Whisper | 5–8× GPT-5.5 | 50–100 free API calls | ~$0.50–2.00/video |
+
+All academic database queries are **free**. Costs only come from LLM API calls.
+
+---
+
+## FAQ
+
+**Does this replace peer review?** No. The system retrieves and cites peer-reviewed sources, but it does not perform peer review itself. It's a research *assistant*, not a replacement for expert judgment.
+
+**How accurate are the citations?** Citations are validated against fetched metadata (DOI, title, authors). The system prunes hallucinated citations that don't match any retrieved source. However, the LLM may still miscorrelate a claim with a source — the evidence synthesis pass helps catch this.
+
+**What if an academic API is down?** The pipeline continues without that source. Failures are logged to the audit trail and reported in the console.
+
+**Can I use this for non-YouTube videos?** Yes. With `--skip-download`, any local video file can be processed. The `--transcript` flag lets you generate reports from any existing transcript.
+
+**What languages does transcription support?** Whisper supports 99 languages. Transcription quality varies by language.
+
+**Is my data private?** All processing is local except for API calls (transcription to OpenAI, report generation to your chosen AI provider, literature search to public academic databases). No data is stored on external servers beyond what those APIs normally log.
+
+---
+
+## Contributing
+
+Contributions welcome. Areas of interest:
+
+- Additional academic database adapters (PubMed, Scopus, Web of Science)
+- Additional domain profiles
+- Export formats (LaTeX, docx, PDF)
+- Web UI / Electron app
+- Docker containerization
+- Additional citation styles (MLA, Harvard, Vancouver)
+- Full-text retrieval and analysis (beyond metadata)
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
+
+---
+
+<p align="center">
+  <b>YouTube Research AI</b> — From passive watching to active research.<br>
+  Built with ❤️ for lifelong learners, researchers, and the insatiably curious.
+</p>
