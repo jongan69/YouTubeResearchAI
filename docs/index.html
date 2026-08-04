@@ -11,11 +11,10 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>">
 <link rel="canonical" href="https://jongan69.github.io/YouTubeResearchAI/">
 <meta property="og:title" content="YTResearchAI — Turn Any Video Into a PhD-Grade Research Report">
-<meta property="og:description" content="Free open-source tool. Paste any video URL, get a fully cited research report. 1,750+ sites supported.">
+<meta property="og:description" content="Free open-source tool. Paste any video URL, get a fully cited research report.">
 <meta property="og:image" content="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-social-card.png">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-<meta property="og:type" content="website">
-<meta property="og:url" content="https://jongan69.github.io/YouTubeResearchAI/">
+<meta property="og:type" content="website"><meta property="og:url" content="https://jongan69.github.io/YouTubeResearchAI/">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="YTResearchAI — Turn Any Video Into a Research Report">
 <meta name="twitter:description" content="Free. Open source. Paste a URL, get a cited research report.">
@@ -25,113 +24,110 @@
 <body>
 
 <div id="app">
-  <!-- ═══════════ HERO ═══════════ -->
-  <header class="hero-section">
+  <!-- ═══ HERO ═══ -->
+  <header class="hero">
     <img src="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-mark.svg"
-         alt="YTResearchAI" class="hero-logo" width="64" height="64">
-    <h1>Turn Any Video Into a<br>PhD-Grade Research Report</h1>
+         alt="YTResearchAI" class="hero-mark" width="56" height="56">
+    <h1>Turn any video into a<br>PhD&#8209;grade research&nbsp;report</h1>
     <p class="hero-sub">
-      Paste a URL from any of 1,750+ sites. Get a fully cited research report with peer-reviewed sources,
-      evidence synthesis, and claim verification — all in minutes. <strong>Free &amp; open source.</strong>
+      Paste a URL from any of 1,750+ sites. Get a fully cited report with peer-reviewed
+      sources, evidence synthesis, and claim verification.<br><strong>Free &amp; open source.</strong>
     </p>
-    <div class="badge-row">
-      <span class="badge badge-accent">📚 4 Academic DBs</span>
-      <span class="badge badge-green">✅ Claim Verification</span>
-      <span class="badge badge-yellow">🔬 Evidence Synthesis</span>
-      <span class="badge badge-pink">🎓 5 Domains</span>
+    <div class="chip-row">
+      <span class="chip chip-blue">4 Academic databases</span>
+      <span class="chip chip-green">Claim verification</span>
+      <span class="chip chip-amber">Evidence synthesis</span>
+      <span class="chip chip-pink">5 Domain profiles</span>
     </div>
   </header>
 
-  <!-- ═══════════ FORM ═══════════ -->
-  <section class="card" id="form-section">
-    <div class="form-row">
-      <input type="url" id="url-input" placeholder="Paste a video URL (YouTube, Vimeo, TikTok, Coursera, etc.)" autofocus>
-      <button id="submit-btn" class="btn-primary">Generate Report</button>
+  <!-- ═══ FORM ═══ -->
+  <section class="panel" id="form-section">
+    <div class="input-group">
+      <input type="url" id="url-input"
+             placeholder="Paste a video URL — YouTube, Vimeo, TikTok, Coursera, or any of 1,750+ sites"
+             autofocus>
+      <button id="submit-btn" class="btn">Generate&nbsp;Report</button>
     </div>
-    <div class="options-row" id="options-row" style="display:none">
-      <label class="opt"><input type="checkbox" id="opt-research" checked> 📚 Literature search + citations</label>
-      <label class="opt"><input type="checkbox" id="opt-verify"> 🔬 Verify claims</label>
-      <label class="opt"><input type="checkbox" id="opt-vision"> 🖼️ Visual analysis</label>
-      <select id="opt-style" class="opt-select">
-        <option value="apa">APA</option>
-        <option value="chicago">Chicago</option>
-        <option value="ieee">IEEE</option>
+    <div class="form-options" id="options-row" hidden>
+      <label class="toggle"><input type="checkbox" id="opt-research" checked> Literature &amp; citations</label>
+      <label class="toggle"><input type="checkbox" id="opt-verify"> Verify claims</label>
+      <label class="toggle"><input type="checkbox" id="opt-vision"> Visual analysis</label>
+      <select id="opt-style" class="style-select">
+        <option value="apa">APA</option><option value="chicago">Chicago</option><option value="ieee">IEEE</option>
       </select>
-      <button id="options-toggle" class="btn-ghost">⚙️ Options</button>
+      <button id="options-toggle" class="btn-text">Options</button>
     </div>
     <div class="key-row">
-      <input type="password" id="api-key-input" placeholder="Your OpenAI API key (optional — free tier available)">
-      <span class="key-hint" id="key-hint"></span>
+      <input type="password" id="api-key-input" placeholder="OpenAI API key — optional, free tier available">
+      <span class="key-status" id="key-hint"></span>
     </div>
-    <div id="form-status"></div>
+    <div class="form-msg" id="form-status"></div>
   </section>
 
-  <!-- ═══════════ PROGRESS ═══════════ -->
-  <section class="card" id="progress-section" style="display:none">
-    <div class="progress-header">
-      <span id="progress-stage">Starting...</span>
-      <span id="progress-pct">0%</span>
+  <!-- ═══ PROGRESS ═══ -->
+  <section class="panel" id="progress-section" hidden>
+    <div class="prog-header">
+      <span class="prog-stage" id="progress-stage"></span>
+      <span class="prog-pct" id="progress-pct">0%</span>
     </div>
-    <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-bar"></div></div>
-    <p class="progress-msg" id="progress-msg"></p>
+    <div class="prog-track"><div class="prog-fill" id="progress-bar"></div></div>
+    <p class="prog-msg" id="progress-msg"></p>
   </section>
 
-  <!-- ═══════════ REPORT ═══════════ -->
-  <section class="card" id="report-section" style="display:none">
-    <div class="report-actions">
-      <button id="download-md" class="btn-secondary">⬇ Markdown</button>
-      <button id="download-json" class="btn-secondary">⬇ JSON</button>
-      <button id="copy-link" class="btn-ghost">🔗 Copy Link</button>
-      <button id="new-report-btn" class="btn-ghost">+ New</button>
+  <!-- ═══ REPORT ═══ -->
+  <section class="panel" id="report-section" hidden>
+    <div class="report-toolbar">
+      <div class="toolbar-left">
+        <button id="download-md" class="btn-sm">Markdown</button>
+        <button id="download-json" class="btn-sm">JSON</button>
+        <button id="copy-link" class="btn-sm-ghost">Copy link</button>
+      </div>
+      <button id="new-report-btn" class="btn-sm-ghost">New report</button>
     </div>
-    <div id="report-meta"></div>
-    <div id="report-content" class="report-content"></div>
+    <div class="report-meta" id="report-meta"></div>
+    <article class="report-body" id="report-content"></article>
   </section>
 
-  <!-- ═══════════ ERROR ═══════════ -->
-  <section class="card card-error" id="error-section" style="display:none">
-    <h3>⚠️ Something went wrong</h3>
+  <!-- ═══ ERROR ═══ -->
+  <section class="panel panel-error" id="error-section" hidden>
+    <h3>Something went wrong</h3>
     <p id="error-msg"></p>
-    <button id="retry-btn" class="btn-primary">Try Again</button>
+    <button id="retry-btn" class="btn">Try again</button>
   </section>
 
-  <!-- ═══════════ FEATURES ═══════════ -->
-  <section class="features-section">
-    <h2>How It Works</h2>
+  <!-- ═══ FEATURES ═══ -->
+  <section class="features">
     <div class="pipeline">
-      <span class="pipeline-step">📥 Download</span><span class="pipeline-arrow">→</span>
-      <span class="pipeline-step">🎙️ Transcribe</span><span class="pipeline-arrow">→</span>
-      <span class="pipeline-step">🔍 Search Literature</span><span class="pipeline-arrow">→</span>
-      <span class="pipeline-step">🧪 Verify Claims</span><span class="pipeline-arrow">→</span>
-      <span class="pipeline-step">📝 Cited Report</span>
+      <span class="pipe-step">Download</span><span class="pipe-connector"></span>
+      <span class="pipe-step">Transcribe</span><span class="pipe-connector"></span>
+      <span class="pipe-step">Search literature</span><span class="pipe-connector"></span>
+      <span class="pipe-step">Verify claims</span><span class="pipe-connector"></span>
+      <span class="pipe-step">Cited report</span>
     </div>
 
-    <h2>What You Get</h2>
-    <div class="stats-row">
-      <div class="stat"><div class="stat-number">1,750+</div><div class="stat-label">Video sources supported</div></div>
-      <div class="stat"><div class="stat-number">4</div><div class="stat-label">Academic databases searched</div></div>
-      <div class="stat"><div class="stat-number">5</div><div class="stat-label">Domain research profiles</div></div>
-      <div class="stat"><div class="stat-number">$0</div><div class="stat-label">To operate (BYO key)</div></div>
+    <div class="stat-row">
+      <div class="stat"><span class="stat-val">1,750+</span><span class="stat-label">Video sources</span></div>
+      <div class="stat"><span class="stat-val">4</span><span class="stat-label">Academic databases</span></div>
+      <div class="stat"><span class="stat-val">5</span><span class="stat-label">Domain profiles</span></div>
+      <div class="stat"><span class="stat-val">$0</span><span class="stat-label">To operate</span></div>
     </div>
 
-    <div class="features-grid">
-      <div class="feature-card"><div class="feature-icon">🔬</div><h3>Automated Literature Search</h3><p>Queries arXiv, Semantic Scholar, CrossRef &amp; OpenAlex simultaneously. Scores by citation count, recency, and relevance. All APIs free.</p></div>
-      <div class="feature-card"><div class="feature-icon">✅</div><h3>Claim Verification</h3><p>Every claim assessed against peer-reviewed literature: well-supported, plausible, contested, speculative, or opinion.</p></div>
-      <div class="feature-card"><div class="feature-icon">📝</div><h3>Proper Citations</h3><p>APA, Chicago, or IEEE. Every reference includes DOI. Hallucinated citations are automatically pruned.</p></div>
-      <div class="feature-card"><div class="feature-icon">🎓</div><h3>Domain-Aware</h3><p>CS, Medicine, Social Sciences, Humanities, Natural Sciences — auto-detected with tailored research strategies.</p></div>
-      <div class="feature-card"><div class="feature-icon">🔄</div><h3>Iterative Deep Research</h3><p>Multi-pass: finds gaps, runs targeted searches, re-verifies. Converges when no new sources found.</p></div>
-      <div class="feature-card"><div class="feature-icon">🏗️</div><h3>Provider-Agnostic</h3><p>OpenAI, Anthropic, Google Gemini, or any compatible endpoint. Features degrade gracefully.</p></div>
+    <h2 class="section-title">What you get</h2>
+    <div class="card-grid">
+      <div class="feat-card"><span class="feat-icon">🔬</span><h4>Literature search</h4><p>Queries arXiv, Semantic Scholar, CrossRef &amp; OpenAlex simultaneously. Scored by citations, recency &amp; relevance.</p></div>
+      <div class="feat-card"><span class="feat-icon">✅</span><h4>Claim verification</h4><p>Every claim assessed against the literature: well-supported, plausible, contested, speculative, or opinion.</p></div>
+      <div class="feat-card"><span class="feat-icon">📝</span><h4>Proper citations</h4><p>APA, Chicago, or IEEE. Every reference includes a DOI. Fabricated citations are automatically pruned.</p></div>
+      <div class="feat-card"><span class="feat-icon">🎓</span><h4>Domain-aware</h4><p>CS, medicine, social sciences, humanities, natural sciences — auto-detected with tailored research strategy.</p></div>
+      <div class="feat-card"><span class="feat-icon">🔄</span><h4>Iterative deep research</h4><p>Multi-pass: finds literature gaps, runs targeted searches, re-verifies. Converges when nothing new is found.</p></div>
+      <div class="feat-card"><span class="feat-icon">🏗️</span><h4>Provider-agnostic</h4><p>OpenAI, Anthropic, Google Gemini, or any compatible endpoint. Features degrade gracefully, never crash.</p></div>
     </div>
   </section>
 
-  <!-- ═══════════ FOOTER ═══════════ -->
-  <footer class="app-footer">
-    <p>
-      <strong>YTResearchAI</strong> — MIT License ·
-      <a href="https://github.com/jongan69/YouTubeResearchAI" target="_blank">GitHub</a> ·
-      <a href="https://github.com/jongan69/YouTubeResearchAI#readme" target="_blank">Documentation</a>
-    </p>
-    <p style="margin-top:4px">Built for lifelong learners, researchers, and the insatiably curious.</p>
+  <!-- ═══ FOOTER ═══ -->
+  <footer class="footer">
+    <p><strong>YTResearchAI</strong> &middot; MIT License &middot; <a href="https://github.com/jongan69/YouTubeResearchAI">GitHub</a> &middot; <a href="https://github.com/jongan69/YouTubeResearchAI#readme">Docs</a></p>
+    <p>Built for lifelong learners, researchers, and the insatiably curious.</p>
   </footer>
 </div>
 
