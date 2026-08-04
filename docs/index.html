@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-<title>YouTube Research AI — Turn Any YouTube Video Into a PhD-Grade Research Report</title>
-<meta name="description" content="Automated academic research pipeline. Download YouTube videos, transcribe with Whisper, search peer-reviewed literature across arXiv, Semantic Scholar, CrossRef, and OpenAlex, verify claims against evidence, and generate fully cited research reports — all with one command. Free and open source.">
-<meta name="keywords" content="YouTube research, academic research, AI research assistant, literature search, citation generator, video to research paper, PhD research tool, automated literature review, evidence synthesis, transcript to paper, YouTube transcript, academic writing, research pipeline, open source research tool, AI academic tool, peer-reviewed citations, semantic scholar, arxiv, crossref, openalex">
+<title>YouTube Research AI — Turn Any Video Into a PhD-Grade Research Report</title>
+<meta name="description" content="Automated academic research pipeline. Download videos from 1,750+ sites, transcribe with Whisper, search peer-reviewed literature across arXiv, Semantic Scholar, CrossRef, and OpenAlex, verify claims against evidence, and generate fully cited research reports — all with one command. Free and open source.">
+<meta name="keywords" content="video research, academic research, AI research assistant, literature search, citation generator, video to research paper, PhD research tool, automated literature review, evidence synthesis, transcript to paper, video transcript, academic writing, research pipeline, open source research tool, AI academic tool, peer-reviewed citations, semantic scholar, arxiv, crossref, openalex, yt-dlp, vimeo, twitch, coursera">
 <meta name="author" content="YouTube Research AI">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#090D15">
 <link rel="icon" type="image/svg+xml" href="youtube-research-ai-favicon.svg">
 <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-favicon-512.png">
 <link rel="canonical" href="https://jongan69.github.io/YouTubeResearchAI/">
-<meta property="og:title" content="YouTube Research AI — Turn Any YouTube Video Into a PhD-Grade Research Report">
-<meta property="og:description" content="Free open-source tool that downloads YouTube videos, transcribes them, searches academic databases, verifies claims, and generates cited research reports.">
+<meta property="og:title" content="YouTube Research AI — Turn Any Video Into a PhD-Grade Research Report">
+<meta property="og:description" content="Free open-source tool that downloads videos from 1,750+ sites, transcribes them, searches academic databases, verifies claims, and generates cited research reports.">
 <meta property="og:image" content="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-social-card.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -21,8 +21,8 @@
 <meta property="og:url" content="https://jongan69.github.io/YouTubeResearchAI/">
 <meta property="og:site_name" content="YouTube Research AI">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="YouTube Research AI — Turn Videos Into Cited Research Reports">
-<meta name="twitter:description" content="Automated academic research pipeline. Download, transcribe, search literature, verify claims, generate cited reports. Free and open source.">
+<meta name="twitter:title" content="YouTube Research AI — Turn Any Video Into a Cited Research Report">
+<meta name="twitter:description" content="Automated academic research pipeline. Download from 1,750+ sites, transcribe, search literature, verify claims, generate cited reports. Free and open source.">
 <meta name="twitter:image" content="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-social-card.png">
 <style>
 :root {
@@ -292,10 +292,10 @@ footer {
       class="hero-logo"
       width="80" height="80"
     >
-    <h1>Turn Any YouTube Video Into a PhD-Grade Research Report</h1>
+    <h1>Turn Any Video Into a PhD-Grade Research Report</h1>
     <p>
-      An automated academic research pipeline. Download, transcribe, search peer-reviewed literature,
-      verify claims, and generate fully cited research reports &mdash; all with one command.
+      An automated academic research pipeline. Download from 1,750+ sites, transcribe with Whisper,
+      search peer-reviewed literature, verify claims, and generate fully cited research reports &mdash; all with one command.
       <strong>Free and open source.</strong>
     </p>
     <div class="badge-row">
@@ -436,7 +436,7 @@ footer {
       <span class="comment"># 2. Add your API key</span><br>
       cp .env.example .env<br>
       <span class="comment"># Edit .env: set OPENAI_API_KEY=sk-your-key</span><br><br>
-      <span class="comment"># 3. Add a YouTube URL</span><br>
+      <span class="comment"># 3. Add a video URL (any of 1,750+ supported sites)</span><br>
       echo "https://www.youtube.com/watch?v=VIDEO_ID" &gt; links.txt<br><br>
       <span class="comment"># 4. Run PhD-grade research</span><br>
       npm run research <span class="flag">--research</span> <span class="flag">--verify</span> <span class="flag">--citation-style</span> apa
@@ -464,6 +464,69 @@ footer {
       </tbody>
     </table>
     </div>
+  </div>
+</section>
+
+<!-- Supported Sources -->
+<section class="section">
+  <div class="container">
+    <h2>1,750+ Video Sources Supported</h2>
+    <p class="subtitle">Any site yt-dlp can download, this pipeline can turn into a cited research report.</p>
+    <div class="features-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+      <div class="feature-card" style="text-align:center;">
+        <div class="feature-icon">▶️</div>
+        <h3>YouTube</h3>
+        <p>Videos, Shorts, livestreams</p>
+      </div>
+      <div class="feature-card" style="text-align:center;">
+        <div class="feature-icon">🎬</div>
+        <h3>Vimeo</h3>
+        <p>Hosted &amp; on-demand</p>
+      </div>
+      <div class="feature-card" style="text-align:center;">
+        <div class="feature-icon">🎮</div>
+        <h3>Twitch</h3>
+        <p>VODs, clips, highlights</p>
+      </div>
+      <div class="feature-card" style="text-align:center;">
+        <div class="feature-icon">📱</div>
+        <h3>TikTok</h3>
+        <p>Videos &amp; slideshows</p>
+      </div>
+      <div class="feature-card" style="text-align:center;">
+        <div class="feature-icon">🐦</div>
+        <h3>Twitter / X</h3>
+        <p>Video posts &amp; spaces</p>
+      </div>
+      <div class="feature-card" style="text-align:center;">
+        <div class="feature-icon">🎓</div>
+        <h3>Coursera &amp; edX</h3>
+        <p>Lecture series &amp; courses</p>
+      </div>
+      <div class="feature-card" style="text-align:center;">
+        <div class="feature-icon">🏛️</div>
+        <h3>MIT OCW &amp; Academic</h3>
+        <p>Open lectures &amp; seminars</p>
+      </div>
+      <div class="feature-card" style="text-align:center;">
+        <div class="feature-icon">🎙️</div>
+        <h3>Podcasts</h3>
+        <p>Audio &amp; video episodes</p>
+      </div>
+      <div class="feature-card" style="text-align:center;">
+        <div class="feature-icon">📰</div>
+        <h3>News Sites</h3>
+        <p>Interviews &amp; reports</p>
+      </div>
+      <div class="feature-card" style="text-align:center;">
+        <div class="feature-icon">📂</div>
+        <h3>Local Files</h3>
+        <p>Any MP4 on disk</p>
+      </div>
+    </div>
+    <p style="text-align:center;margin-top:24px;color:var(--muted);font-size:0.9rem;">
+      And 1,740+ more — full list at <a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank" rel="noopener">yt-dlp supported sites</a>
+    </p>
   </div>
 </section>
 

@@ -27,7 +27,7 @@ Usage:
   npm run research -- [options]
 
 Core options:
-  --links FILE                Links file. Default: ./links.txt
+  --links FILE                Video URLs file (any yt-dlp supported site). Default: ./links.txt
   --out-dir DIR               Output root. Default: ./outputs
   --run-name NAME             Run folder name. Default: run-YYYY-MM-DD-HHMMSS
   --ai-provider ID            AI provider. Default: from env or openai
