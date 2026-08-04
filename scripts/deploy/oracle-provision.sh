@@ -8,7 +8,7 @@ REGION="us-ashburn-1"
 SUBNET_ID="ocid1.subnet.oc1.iad.aaaaaaaa7oymebqiz2xh5kgz7ejwm5pvztweluw2oi5uwv5esfnb7lpqrbvq"
 IMAGE_ID="ocid1.image.oc1.iad.aaaaaaaabcwypxed4llxx3bkwdfsbmqhbmpxxa4jsiyanobo55rjbkftcr4a"
 STATE_FILE="/tmp/oci-instance-state.json"
-RETRY_DELAY=120  # seconds between retry cycles
+RETRY_DELAY=60  # seconds between retry cycles
 
 ADS=("rsEl:US-ASHBURN-AD-1" "rsEl:US-ASHBURN-AD-2" "rsEl:US-ASHBURN-AD-3")
 
@@ -29,7 +29,7 @@ while true; do
   ATTEMPT=$((ATTEMPT + 1))
 
   for AD in "${ADS[@]}"; do
-    for OCPU in 1 2; do
+    for OCPU in 4 2; do
       MEM=$((OCPU * 6))
       TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
       echo "[$TIMESTAMP] Attempt #$ATTEMPT | AD=$AD | OCPU=$OCPU | MEM=${MEM}GB"
