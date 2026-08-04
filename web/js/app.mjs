@@ -209,8 +209,9 @@ const init = async () => {
       const r = await API.submitJob({url, options, apiKey: key});
 
       if (r.error) {
-        if (r.freeTierRemaining !== undefined) {
-          $('#form-status').textContent = `Free tier limit reached. Add your API key above (${r.freeTierRemaining} free reports remaining today).`;
+        if (r.freeTier) {
+          const ft = r.freeTier;
+          $('#form-status').textContent = `Free tier: ${ft.remaining}/${ft.limit} remaining today (resets at midnight UTC). Add your API key above for unlimited.`;
         } else {
           showError(r.error);
         }

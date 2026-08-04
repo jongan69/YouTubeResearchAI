@@ -91,7 +91,9 @@ const server = createServer(async (req, res) => {
   try {
     // GET /api/health
     if (req.method === 'GET' && url.pathname === '/api/health') {
-      return json(res, {status: 'ok', uptime: process.uptime(), queueSize: queue.getAll().length});
+      const jobs = queue.getAll();
+      const active = jobs.filter(j => j.status === 'queued' || j.status === 'running').length;
+      return json(res, {status: 'ok', uptime: process.uptime(), activeJobs: active, totalJobs: jobs.length});
     }
 
     // GET /api/jobs
@@ -179,9 +181,12 @@ const server = createServer(async (req, res) => {
       const apiKey = resolveApiKey(body, req.headers, ip);
 
       if (!apiKey) {
+        const today = new Date().toISOString().slice(0,10);
+        const used = freeTierCounts.get(`${ip}:${today}`) ?? 0;
+        const remaining = OPERATOR_KEY ? Math.max(0, FREE_TIER_LIMIT - used) : 0;
         return json(res, {
-          error: 'API key required. Provide your OpenAI/Anthropic key in the X-API-Key header or apiKey field. Free tier limit reached for today.',
-          freeTierRemaining: OPERATOR_KEY ? Math.max(0, FREE_TIER_LIMIT - (freeTierCounts.get(`${ip}:${new Date().toISOString().slice(0,10)}`) ?? 0)) : 0,
+          error: 'API key required. Provide your OpenAI/Anthropic key in the X-API-Key header or apiKey field.',
+          freeTier: {used, limit: FREE_TIER_LIMIT, remaining, resetsAt: `${today}T23:59:59Z`},
         }, 402);
       }
 

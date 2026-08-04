@@ -3,6 +3,7 @@
 // per-job temp directories instead of the hardcoded outputs/run-* structure.
 
 import {execFileSync} from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import {loadEnv} from './lib.mjs';
 import {buildConfig, createProviders} from './ai-config.mjs';
@@ -29,12 +30,17 @@ const downloadVideo = (url, downloadDir) => {
   if (isYouTube) args.push('--extractor-args','youtube:player_client=android,web');
   args.push(url);
 
+  // Skip browser cookies in Docker/Cloud Run — no Chrome available
+  const inContainer = fs.existsSync('/.dockerenv') || process.env.K_SERVICE || process.env.CLOUD_RUN_JOB;
+
   let stdout = '';
   try { stdout = execFileSync('yt-dlp', args, {encoding:'utf8',stdio:['ignore','pipe','inherit']}); }
   catch {
-    if (isYouTube) {
+    if (isYouTube && !inContainer) {
       stdout = execFileSync('yt-dlp', ['--cookies-from-browser','chrome',...args], {encoding:'utf8',stdio:['ignore','pipe','inherit']});
-    } else throw new Error(`Download failed for ${url}`);
+    } else {
+      throw new Error(`Download failed for ${url}. ${isYouTube ? 'The video may be age-restricted, geo-blocked, or unavailable.' : 'The site may require authentication.'}`);
+    }
   }
   const downloaded = stdout.split(/\r?\n/).map((l)=>l.trim()).filter(Boolean).at(-1);
   if (!downloaded) throw new Error(`yt-dlp did not report a downloaded file for ${url}`);

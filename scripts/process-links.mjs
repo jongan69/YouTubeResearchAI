@@ -177,17 +177,20 @@ const downloadVideo = (url) => {
 
   baseArgs.push(url);
 
+  const inContainer = fs.existsSync('/.dockerenv') || process.env.K_SERVICE || process.env.CLOUD_RUN_JOB;
+
   let stdout = '';
   try {
     stdout = execFileSync('yt-dlp', baseArgs, {encoding:'utf8',stdio:['ignore','pipe','inherit']});
   } catch {
-    // Cookies retry is only useful for YouTube (bypasses age-gating, bot detection)
-    if (isYouTube) {
+    // Cookies retry only on desktop with Chrome available
+    if (isYouTube && !inContainer) {
       console.warn('Download failed without browser cookies. Retrying with Chrome cookies...');
       const cookieArgs = ['--cookies-from-browser','chrome',...baseArgs];
       stdout = execFileSync('yt-dlp', cookieArgs, {encoding:'utf8',stdio:['ignore','pipe','inherit']});
     } else {
-      throw new Error(`yt-dlp download failed for ${url}. The site may require authentication or cookies.`);
+      const hint = isYouTube && inContainer ? ' (running in container — no browser cookies available)' : '';
+      throw new Error(`yt-dlp download failed for ${url}.${hint}`);
     }
   }
   const downloaded = stdout.split(/\r?\n/).map((l)=>l.trim()).filter(Boolean).at(-1);
