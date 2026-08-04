@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
 <title>YTResearchAI — Turn Any Video Into a PhD-Grade Research Report</title>
 <meta name="description" content="Free web app. Paste any video URL from 1,750+ sites, get a fully cited research report with peer-reviewed sources. Automated literature search, claim verification, and citations.">
-<meta name="keywords" content="video research, academic research, AI research assistant, literature search, citation generator, video to research paper, PhD research tool, automated literature review, evidence synthesis, transcript to paper, research pipeline, open source, peer-reviewed citations, semantic scholar, arxiv, crossref, openalex, yt-dlp, nodejs, free">
-<meta name="author" content="YouTube Research AI">
+<meta name="keywords" content="video research, academic research, AI research assistant, literature search, citation generator, video to research paper, PhD research tool, automated literature review, evidence synthesis, research pipeline, open source, peer-reviewed citations, semantic scholar, arxiv, crossref, openalex, yt-dlp, free">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#090D15">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>">
@@ -14,11 +13,9 @@
 <meta property="og:title" content="YTResearchAI — Turn Any Video Into a PhD-Grade Research Report">
 <meta property="og:description" content="Free open-source tool. Paste any video URL, get a fully cited research report. 1,750+ sites supported.">
 <meta property="og:image" content="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-social-card.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://jongan69.github.io/YouTubeResearchAI/">
-<meta property="og:site_name" content="YTResearchAI">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="YTResearchAI — Turn Any Video Into a Research Report">
 <meta name="twitter:description" content="Free. Open source. Paste a URL, get a cited research report.">
@@ -28,14 +25,24 @@
 <body>
 
 <div id="app">
-  <header class="app-header">
-    <div class="logo-row">
-      <img src="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-mark.svg" alt="YTResearchAI" width="40" height="40" style="filter:drop-shadow(0 2px 8px rgba(88,166,255,0.25))">
-      <h1>YTResearchAI</h1>
+  <!-- ═══════════ HERO ═══════════ -->
+  <header class="hero-section">
+    <img src="https://raw.githubusercontent.com/jongan69/YouTubeResearchAI/main/imageAssets/youtube-research-ai-mark.svg"
+         alt="YTResearchAI" class="hero-logo" width="64" height="64">
+    <h1>Turn Any Video Into a<br>PhD-Grade Research Report</h1>
+    <p class="hero-sub">
+      Paste a URL from any of 1,750+ sites. Get a fully cited research report with peer-reviewed sources,
+      evidence synthesis, and claim verification — all in minutes. <strong>Free &amp; open source.</strong>
+    </p>
+    <div class="badge-row">
+      <span class="badge badge-accent">📚 4 Academic DBs</span>
+      <span class="badge badge-green">✅ Claim Verification</span>
+      <span class="badge badge-yellow">🔬 Evidence Synthesis</span>
+      <span class="badge badge-pink">🎓 5 Domains</span>
     </div>
-    <p class="tagline">Turn any video into a PhD-grade research report — <a href="https://github.com/jongan69/YouTubeResearchAI" target="_blank" rel="noopener">free &amp; open source</a></p>
   </header>
 
+  <!-- ═══════════ FORM ═══════════ -->
   <section class="card" id="form-section">
     <div class="form-row">
       <input type="url" id="url-input" placeholder="Paste a video URL (YouTube, Vimeo, TikTok, Coursera, etc.)" autofocus>
@@ -52,22 +59,24 @@
       </select>
       <button id="options-toggle" class="btn-ghost">⚙️ Options</button>
     </div>
-    <div class="key-row" id="key-row">
-      <input type="password" id="api-key-input" placeholder="Your OpenAI API key (optional — 10 free reports/day available)">
+    <div class="key-row">
+      <input type="password" id="api-key-input" placeholder="Your OpenAI API key (optional — free tier available)">
       <span class="key-hint" id="key-hint"></span>
     </div>
     <div id="form-status"></div>
   </section>
 
+  <!-- ═══════════ PROGRESS ═══════════ -->
   <section class="card" id="progress-section" style="display:none">
     <div class="progress-header">
       <span id="progress-stage">Starting...</span>
       <span id="progress-pct">0%</span>
     </div>
     <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-bar"></div></div>
-    <p class="progress-msg" id="progress-msg">Initializing pipeline...</p>
+    <p class="progress-msg" id="progress-msg"></p>
   </section>
 
+  <!-- ═══════════ REPORT ═══════════ -->
   <section class="card" id="report-section" style="display:none">
     <div class="report-actions">
       <button id="download-md" class="btn-secondary">⬇ Markdown</button>
@@ -79,23 +88,50 @@
     <div id="report-content" class="report-content"></div>
   </section>
 
+  <!-- ═══════════ ERROR ═══════════ -->
   <section class="card card-error" id="error-section" style="display:none">
     <h3>⚠️ Something went wrong</h3>
     <p id="error-msg"></p>
     <button id="retry-btn" class="btn-primary">Try Again</button>
   </section>
 
-  <section class="card" id="recent-section" style="display:none">
-    <h3>📋 Recent Reports</h3>
-    <div id="recent-list"></div>
+  <!-- ═══════════ FEATURES ═══════════ -->
+  <section class="features-section">
+    <h2>How It Works</h2>
+    <div class="pipeline">
+      <span class="pipeline-step">📥 Download</span><span class="pipeline-arrow">→</span>
+      <span class="pipeline-step">🎙️ Transcribe</span><span class="pipeline-arrow">→</span>
+      <span class="pipeline-step">🔍 Search Literature</span><span class="pipeline-arrow">→</span>
+      <span class="pipeline-step">🧪 Verify Claims</span><span class="pipeline-arrow">→</span>
+      <span class="pipeline-step">📝 Cited Report</span>
+    </div>
+
+    <h2>What You Get</h2>
+    <div class="stats-row">
+      <div class="stat"><div class="stat-number">1,750+</div><div class="stat-label">Video sources supported</div></div>
+      <div class="stat"><div class="stat-number">4</div><div class="stat-label">Academic databases searched</div></div>
+      <div class="stat"><div class="stat-number">5</div><div class="stat-label">Domain research profiles</div></div>
+      <div class="stat"><div class="stat-number">$0</div><div class="stat-label">To operate (BYO key)</div></div>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card"><div class="feature-icon">🔬</div><h3>Automated Literature Search</h3><p>Queries arXiv, Semantic Scholar, CrossRef &amp; OpenAlex simultaneously. Scores by citation count, recency, and relevance. All APIs free.</p></div>
+      <div class="feature-card"><div class="feature-icon">✅</div><h3>Claim Verification</h3><p>Every claim assessed against peer-reviewed literature: well-supported, plausible, contested, speculative, or opinion.</p></div>
+      <div class="feature-card"><div class="feature-icon">📝</div><h3>Proper Citations</h3><p>APA, Chicago, or IEEE. Every reference includes DOI. Hallucinated citations are automatically pruned.</p></div>
+      <div class="feature-card"><div class="feature-icon">🎓</div><h3>Domain-Aware</h3><p>CS, Medicine, Social Sciences, Humanities, Natural Sciences — auto-detected with tailored research strategies.</p></div>
+      <div class="feature-card"><div class="feature-icon">🔄</div><h3>Iterative Deep Research</h3><p>Multi-pass: finds gaps, runs targeted searches, re-verifies. Converges when no new sources found.</p></div>
+      <div class="feature-card"><div class="feature-icon">🏗️</div><h3>Provider-Agnostic</h3><p>OpenAI, Anthropic, Google Gemini, or any compatible endpoint. Features degrade gracefully.</p></div>
+    </div>
   </section>
 
+  <!-- ═══════════ FOOTER ═══════════ -->
   <footer class="app-footer">
     <p>
+      <strong>YTResearchAI</strong> — MIT License ·
       <a href="https://github.com/jongan69/YouTubeResearchAI" target="_blank">GitHub</a> ·
-      <a href="https://github.com/jongan69/YouTubeResearchAI#readme" target="_blank">Docs</a> ·
-      Built for researchers
+      <a href="https://github.com/jongan69/YouTubeResearchAI#readme" target="_blank">Documentation</a>
     </p>
+    <p style="margin-top:4px">Built for lifelong learners, researchers, and the insatiably curious.</p>
   </footer>
 </div>
 
