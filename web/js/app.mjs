@@ -303,12 +303,17 @@ const resetForm = () => {
   hide($('#report-section'));
   hide($('#error-section'));
   hide($('#progress-section'));
+  show($('#form-section'));
   $('#url-input').value = '';
   $('#submit-btn').disabled = false;
   $('#submit-btn').textContent = 'Generate Report';
   $('#form-status').textContent = '';
   $('#url-input').focus();
   if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
+  // Clear share link from URL
+  if (location.search.includes('job=')) {
+    history.replaceState(null, '', location.pathname);
+  }
   loadRecentJobs();
 };
 
@@ -341,5 +346,42 @@ const downloadFile = (filename, content, mime) => {
 
 const slugify = (s) => (s || 'report').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 
+// Share link: load job from ?job=ID parameter
+const loadSharedJob = async () => {
+  const params = new URLSearchParams(location.search);
+  const jobId = params.get('job');
+  if (!jobId) return;
+
+  show($('#progress-section'));
+  $('#progress-stage').textContent = 'Loading shared report...';
+  $('#progress-msg').textContent = `Job: ${jobId}`;
+  hide($('#form-section'));
+
+  try {
+    const job = await API.getJob(jobId);
+    if (job.error) { showError('Report not found. It may have expired or the link is invalid.'); return; }
+
+    if (job.status === 'complete' && job.result) {
+      hide($('#progress-section'));
+      showReport(job.result);
+      // Update URL input so user can see the source
+      $('#url-input').value = job.url || '';
+      return;
+    }
+
+    if (job.status === 'failed') {
+      showError(`This report failed: ${job.error || 'Unknown error'}`);
+      return;
+    }
+
+    // Job still running — stream progress
+    state.currentJobId = jobId;
+    $('#submit-btn').disabled = true;
+    streamProgress(jobId);
+  } catch (e) {
+    showError('Could not load the shared report. The link may have expired.');
+  }
+};
+
 // Boot
-init();
+loadSharedJob().then(() => init());
