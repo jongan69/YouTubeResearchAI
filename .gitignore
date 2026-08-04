@@ -8,3 +8,15 @@ outputs/*
 downloads/
 *.log
 *.pem
+*.ppk
+*.key
+*_rsa
+id_rsa*
+*.p12
+*.pfx
+*credential*
+*secret*
+oracle.txt
+oci_config
+.env.backup
+.env.local
