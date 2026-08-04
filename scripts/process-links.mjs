@@ -159,14 +159,36 @@ const writeManifest = () => fs.writeFileSync(manifestPath, `${JSON.stringify(man
 
 const downloadVideo = (url) => {
   const outputTemplate = path.join(downloadDir, '%(title).180B [%(id)s].%(ext)s');
-  const baseArgs = ['--no-playlist','--extractor-args','youtube:player_client=android,web',
-    '--merge-output-format','mp4','--remux-video','mp4','--write-info-json',
-    '--output',outputTemplate,'--print','after_move:filepath',url];
+  const isYouTube = /youtube\.com|youtu\.be/i.test(url);
+
+  const baseArgs = [
+    '--no-playlist',
+    '--merge-output-format','mp4',
+    '--remux-video','mp4',
+    '--write-info-json',
+    '--output',outputTemplate,
+    '--print','after_move:filepath',
+  ];
+
+  // YouTube-specific: use android/web player clients to avoid SABR streaming blocks
+  if (isYouTube) {
+    baseArgs.push('--extractor-args','youtube:player_client=android,web');
+  }
+
+  baseArgs.push(url);
+
   let stdout = '';
-  try { stdout = execFileSync('yt-dlp', baseArgs, {encoding:'utf8',stdio:['ignore','pipe','inherit']}); }
-  catch {
-    console.warn('Download failed without browser cookies. Retrying with Chrome cookies...');
-    stdout = execFileSync('yt-dlp', ['--cookies-from-browser','chrome',...baseArgs], {encoding:'utf8',stdio:['ignore','pipe','inherit']});
+  try {
+    stdout = execFileSync('yt-dlp', baseArgs, {encoding:'utf8',stdio:['ignore','pipe','inherit']});
+  } catch {
+    // Cookies retry is only useful for YouTube (bypasses age-gating, bot detection)
+    if (isYouTube) {
+      console.warn('Download failed without browser cookies. Retrying with Chrome cookies...');
+      const cookieArgs = ['--cookies-from-browser','chrome',...baseArgs];
+      stdout = execFileSync('yt-dlp', cookieArgs, {encoding:'utf8',stdio:['ignore','pipe','inherit']});
+    } else {
+      throw new Error(`yt-dlp download failed for ${url}. The site may require authentication or cookies.`);
+    }
   }
   const downloaded = stdout.split(/\r?\n/).map((l)=>l.trim()).filter(Boolean).at(-1);
   if (!downloaded) throw new Error(`yt-dlp did not report a downloaded file for ${url}`);

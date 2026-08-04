@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-**Automated academic research pipeline.** Download a YouTube video, transcribe it with word-level timestamps, search peer-reviewed literature across four academic databases, verify claims against the evidence, and generate a fully cited research report — all with one command.
+**Automated academic research pipeline.** Download a video from any of 1,750+ supported sites (YouTube, Vimeo, Twitch, TikTok, academic platforms, and more), transcribe it with word-level timestamps, search peer-reviewed literature across four academic databases, verify claims against the evidence, and generate a fully cited research report — all with one command.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen)](https://nodejs.org)
@@ -20,7 +20,7 @@ YouTube Research AI transforms passive video watching into **active academic res
 ### The Pipeline
 
 ```
-YouTube URL → Download (yt-dlp) → Extract Audio (ffmpeg) → Transcribe (Whisper) 
+Video URL → Download (yt-dlp) → Extract Audio (ffmpeg) → Transcribe (Whisper) 
   → Domain Detection → Literature Search (arXiv, Semantic Scholar, CrossRef, OpenAlex) 
   → Evidence Synthesis → Claim Verification → Deep Research Iterations 
   → Cited Report Generation → Reference Formatting
@@ -107,7 +107,7 @@ OPENAI_API_KEY=sk-your-key-here
 ### Run
 
 ```bash
-# Add YouTube URLs to links.txt (one per line)
+# Add video URLs to links.txt (one per line — any site yt-dlp supports)
 echo "https://www.youtube.com/watch?v=VIDEO_ID" > links.txt
 
 # Basic run — transcript + study-guide report
@@ -229,7 +229,7 @@ All four AI providers are supported with feature parity where the provider allow
 
 | Flag | Env Var | Default | Description |
 |---|---|---|---|
-| `--links FILE` | — | `./links.txt` | File with YouTube URLs (one per line) |
+| `--links FILE` | — | `./links.txt` | File with video URLs, one per line (any yt-dlp supported site) |
 | `--out-dir DIR` | — | `./outputs` | Output root directory |
 | `--run-name NAME` | — | `run-YYYY-MM-DD-HHMMSS` | Custom run folder name |
 | `--ai-provider ID` | `AI_PROVIDER` | `openai` | `openai`, `anthropic`, `google`, `openai-compat` |
@@ -441,7 +441,7 @@ All academic database queries are **free**. Costs only come from LLM API calls.
 
 **What if an academic API is down?** The pipeline continues without that source. Failures are logged to the audit trail and reported in the console.
 
-**Can I use this for non-YouTube videos?** Yes. With `--skip-download`, any local video file can be processed. The `--transcript` flag lets you generate reports from any existing transcript.
+**What video sources are supported?** Any of the 1,750+ sites that [yt-dlp](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) supports — YouTube, Vimeo, Twitch, TikTok, Twitter/X, Facebook, Instagram, Dailymotion, Bilibili, Coursera, edX, academic lecture platforms, podcasts, and more. The pipeline auto-detects the source and applies the right download strategy. With `--skip-download`, any local video file works regardless of origin.
 
 **What languages does transcription support?** Whisper supports 99 languages. Transcription quality varies by language.
 
