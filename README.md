@@ -475,3 +475,16 @@ MIT — see [LICENSE](LICENSE) for details.
   <b>YouTube Research AI</b> — From passive watching to active research.<br>
   Built with ❤️ for lifelong learners, researchers, and the insatiably curious.
 </p>
+
+
+---
+
+## Related Projects
+
+- **[ClipCaptionAI](https://github.com/jongan69/ClipCaptionAI)** — AI video editing toolkit for YouTube Shorts, TikTok captions, and Remotion workflows.
+- **[PrepAI](https://github.com/jongan69/PrepAI)** — Local-first fitness AI for iPhone. On-device ML, zero cloud storage.
+- **[ListingOS](https://github.com/jongan69/ListingOS-AI)** — Camera-first AI listing workflow for eBay sellers.
+
+---
+
+*More projects at [github.com/jongan69](https://github.com/jongan69)*
