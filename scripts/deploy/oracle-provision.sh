@@ -161,7 +161,7 @@ while true; do
   done
 
   # Adaptive backoff
-  local DELAY=$RETRY_DELAY
+  DELAY=$RETRY_DELAY
   [ $ATTEMPT -gt 30 ] && DELAY=300
   [ $ATTEMPT -gt 100 ] && DELAY=600
   echo "  ⏳ Cycle #$ATTEMPT done. Waiting ${DELAY}s..."
