@@ -327,6 +327,7 @@ const init = async () => {
       research: $('#opt-research').checked,
       verify: $('#opt-verify').checked,
       vision: $('#opt-vision').checked,
+      audioOnly: $('#opt-audio').checked,
       'citation-style': $('#opt-style').value,
       'reasoning-effort': 'medium',
       verbosity: 'medium',
