@@ -109,28 +109,39 @@ const setFormMsg = (msg) => {
 
 // ---- Markdown rendering (lightweight) --------------------------------------
 
+const DANGEROUS_SCHEMES = /^(javascript|data|vbscript):/i;
+const safeUrl = (href) => {
+  try {
+    const u = new URL(href, location?.origin || 'https://localhost');
+    return DANGEROUS_SCHEMES.test(u.protocol) ? '#' : href;
+  } catch { return '#'; }
+};
+
 const renderMarkdown = (md) => {
-  // Simple but effective markdown → HTML converter
+  // Escape any raw HTML in the input that isn't part of our markdown processing
   let html = md
-    // Headings
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    // Headings (un-escape our own generated tags)
     .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    // Bold + italic
+    // Bold + italic (must handle the escaped markers)
     .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     // Inline code
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    // Images
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
+    // Links — filter dangerous schemes
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, href) => `<a href="${safeUrl(href)}" target="_blank" rel="noopener noreferrer">${text}</a>`)
+    // Images — filter dangerous schemes
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => `<img src="${safeUrl(src)}" alt="${alt}" loading="lazy">`)
     // Horizontal rules
     .replace(/^---$/gm, '<hr>')
     // Blockquotes
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
     // Unordered lists
     .replace(/^- (.+)$/gm, '<li>$1</li>')
     // Ordered lists

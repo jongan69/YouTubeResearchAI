@@ -79,9 +79,9 @@ export class JobQueue extends EventEmitter {
     });
   }
 
-  /** Get all jobs (for recent jobs list). */
+  /** Get all jobs (for recent jobs list). Strips sensitive fields. */
   getAll() {
-    return [...this._jobs.values()].map(({_events, ...rest}) => rest);
+    return [...this._jobs.values()].map(({_events, apiKey, errorStack, ...rest}) => rest);
   }
 
   /** Stop the queue and clean up. */
@@ -136,7 +136,13 @@ export class JobQueue extends EventEmitter {
       job.status = 'failed';
       job.completedAt = new Date().toISOString();
       job.error = err.message ?? String(err);
-      this._emitJobEvent(job, {type: 'error', message: job.error});
+      job.errorStack = err.stack?.split('\n').slice(0, 8).join('\n');
+      console.error(JSON.stringify({
+        ts: new Date().toISOString(), level: 'error', event: 'job-failed',
+        jobId: job.id, url: job.url, stage: job.stage,
+        error: job.error, stack: job.errorStack,
+      }));
+      this._emitJobEvent(job, {type: 'error', message: job.error, stage: job.stage});
     } finally {
       // Clean up temp dir
       try { fs.rmSync(path.join(this._tempDir, `ytresearch-${job.id}`), {recursive: true, force: true}); } catch {}

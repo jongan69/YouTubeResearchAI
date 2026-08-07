@@ -2,7 +2,7 @@
 // Imports existing CLI modules and runs them with progress callbacks and
 // per-job temp directories instead of the hardcoded outputs/run-* structure.
 
-import {execFileSync} from 'node:child_process';
+import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {loadEnv} from './lib.mjs';
@@ -20,9 +20,36 @@ import {
 
 loadEnv();
 
+// ---- Async spawn helper (replaces execFileSync — unblocks event loop) -----
+
+const asyncExec = (cmd, args, {timeoutMs = 0, captureStdout = true, captureStderr = false} = {}) => new Promise((resolve, reject) => {
+  const child = spawn(cmd, args, {stdio: ['ignore', captureStdout ? 'pipe' : 'inherit', captureStderr ? 'pipe' : 'inherit']});
+  let stdout = '', stderr = '';
+  if (captureStdout) child.stdout.on('data', (d) => { stdout += d; });
+  if (captureStderr) child.stderr.on('data', (d) => { stderr += d; });
+
+  let timer;
+  if (timeoutMs > 0) {
+    timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error(`${cmd} timed out after ${timeoutMs / 1000}s`));
+    }, timeoutMs);
+  }
+
+  child.on('error', (err) => { clearTimeout(timer); reject(err); });
+  child.on('close', (code) => {
+    clearTimeout(timer);
+    if (code === 0) resolve({stdout, stderr});
+    else reject(Object.assign(new Error(`${cmd} exited with code ${code}${stderr ? ': ' + stderr.slice(0, 200) : ''}`), {code, stdout, stderr}));
+  });
+});
+
 // ---- File helpers (using temp dir instead of outputs/run-*) ----------------
 
-const downloadVideo = (url, downloadDir, {audioOnly = false} = {}) => {
+const DOWNLOAD_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+const FFMPEG_TIMEOUT_MS = 5 * 60 * 1000;   // 5 minutes
+
+const downloadVideo = async (url, downloadDir, {audioOnly = false} = {}) => {
   const isYouTube = /youtube\.com|youtu\.be/i.test(url);
   const outputTemplate = path.join(downloadDir, '%(title).180B [%(id)s].%(ext)s');
   const formatArgs = audioOnly
@@ -36,30 +63,33 @@ const downloadVideo = (url, downloadDir, {audioOnly = false} = {}) => {
   // Skip browser cookies in Docker/Cloud Run — no Chrome available
   const inContainer = fs.existsSync('/.dockerenv') || process.env.K_SERVICE || process.env.CLOUD_RUN_JOB;
 
-  let stdout = '';
-  try { stdout = execFileSync('yt-dlp', args, {encoding:'utf8',stdio:['ignore','pipe','inherit']}); }
-  catch {
+  let result;
+  try { result = await asyncExec('yt-dlp', args, {timeoutMs: DOWNLOAD_TIMEOUT_MS}); }
+  catch (err) {
     if (isYouTube && !inContainer) {
-      stdout = execFileSync('yt-dlp', ['--cookies-from-browser','chrome',...args], {encoding:'utf8',stdio:['ignore','pipe','inherit']});
+      result = await asyncExec('yt-dlp', ['--cookies-from-browser','chrome',...args], {timeoutMs: DOWNLOAD_TIMEOUT_MS});
     } else {
       throw new Error(`Download failed for ${url}. ${isYouTube ? 'The video may be age-restricted, geo-blocked, or unavailable.' : 'The site may require authentication.'}`);
     }
   }
-  const downloaded = stdout.split(/\r?\n/).map((l)=>l.trim()).filter(Boolean).at(-1);
+  const downloaded = result.stdout.split(/\r?\n/).map((l)=>l.trim()).filter(Boolean).at(-1);
   if (!downloaded) throw new Error(`yt-dlp did not report a downloaded file for ${url}`);
   return path.resolve(downloaded);
 };
 
-const probeDuration = (mp) => Number(execFileSync('ffprobe',['-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',mp],{encoding:'utf8'}).trim());
-
-const extractAudio = (vp, ap) => {
-  execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-i',vp,'-vn','-acodec','libmp3lame','-b:a','48k','-ar','16000','-ac','1',ap],{stdio:'inherit'});
+const probeDuration = async (mp) => {
+  const r = await asyncExec('ffprobe', ['-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',mp], {timeoutMs: 30_000});
+  return Number(r.stdout.trim());
 };
+
+const extractAudio = (vp, ap) => asyncExec('ffmpeg',
+  ['-hide_banner','-loglevel','error','-y','-i',vp,'-vn','-acodec','libmp3lame','-b:a','48k','-ar','16000','-ac','1',ap],
+  {timeoutMs: FFMPEG_TIMEOUT_MS, captureStdout: false});
 
 const transcribe = async (videoPath, transcriptionProvider, model, tempDir, onProgress) => {
   const audioPath = path.join(tempDir, 'audio.mp3');
-  extractAudio(videoPath, audioPath);
-  const dur = probeDuration(audioPath);
+  await extractAudio(videoPath, audioPath);
+  const dur = await probeDuration(audioPath);
   onProgress('transcribe', 40, `Transcribing ${Math.round(dur)}s audio...`, {duration: dur});
 
   if (dur <= 180) {
@@ -76,7 +106,9 @@ const transcribe = async (videoPath, transcriptionProvider, model, tempDir, onPr
     const off = i * chunkSec;
     const d = Math.min(chunkSec, dur - off);
     const cp = path.join(tempDir, `chunk-${i + 1}.mp3`);
-    execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-ss',String(off),'-t',String(d),'-i',audioPath,'-acodec','libmp3lame','-b:a','48k','-ar','16000','-ac','1',cp],{stdio:'inherit'});
+    await asyncExec('ffmpeg',
+      ['-hide_banner','-loglevel','error','-y','-ss',String(off),'-t',String(d),'-i',audioPath,'-acodec','libmp3lame','-b:a','48k','-ar','16000','-ac','1',cp],
+      {timeoutMs: FFMPEG_TIMEOUT_MS, captureStdout: false});
     parts.push({transcription: await transcriptionProvider.transcribe({audioPath: cp, model}), offsetSeconds: off});
     onProgress('transcribe', 40 + Math.round((i + 1) / cc * 50), `Chunk ${i + 1}/${cc}`);
   }
@@ -130,7 +162,7 @@ export async function runPipeline({url, options = {}, apiKey, tempDir, onProgres
 
   // Stage 1: Download
   onProgress('download', 5, 'Downloading video...');
-  const videoPath = downloadVideo(url, tempDir, {audioOnly: config.audioOnly});
+  const videoPath = await downloadVideo(url, tempDir, {audioOnly: config.audioOnly});
 
   // Stage 2: Transcribe
   onProgress('transcribe', 15, 'Extracting audio...');

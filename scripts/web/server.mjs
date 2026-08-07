@@ -14,6 +14,37 @@ loadEnv();
 const PORT = process.env.PORT || 3000;
 const FREE_TIER_LIMIT = Number(process.env.FREE_TIER_DAILY_LIMIT ?? 10);
 const OPERATOR_KEY = process.env.OPERATOR_OPENAI_KEY;
+const MAX_BODY_SIZE = 1_048_576; // 1 MB
+const MAX_QUEUE_SIZE = 100;
+const MAX_URL_LENGTH = 2048;
+
+// ---- Rate limiting (token bucket per IP) -----------------------------------
+
+const rateBuckets = new Map();
+const RATE_LIMITS = { perSecond: 1, perMinute: 60, perHour: 300 };
+
+const checkRateLimit = (ip) => {
+  const now = Date.now();
+  let bucket = rateBuckets.get(ip);
+  if (!bucket || (now - bucket.resetAt) > 3600_000) {
+    bucket = { tokens: RATE_LIMITS.perHour, resetAt: now + 3600_000, lastRefill: now };
+    rateBuckets.set(ip, bucket);
+  }
+  // Refill tokens (1 token per second, up to perHour cap)
+  const elapsed = Math.floor((now - bucket.lastRefill) / 1000);
+  if (elapsed > 0) {
+    bucket.tokens = Math.min(RATE_LIMITS.perHour, bucket.tokens + elapsed * RATE_LIMITS.perSecond);
+    bucket.lastRefill = now;
+  }
+  if (bucket.tokens < 1) return { allowed: false, remaining: 0, retryAfter: Math.ceil((bucket.resetAt - now) / 1000) };
+  bucket.tokens--;
+  return { allowed: true, remaining: bucket.tokens };
+};
+// Hourly cleanup of stale buckets
+setInterval(() => {
+  const cutoff = Date.now() - 3600_000;
+  for (const [ip, b] of rateBuckets) { if (b.resetAt < cutoff) rateBuckets.delete(ip); }
+}, 60 * 60_000);
 
 // ---- Free tier tracking ----------------------------------------------------
 
@@ -36,29 +67,61 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000);
 
+// ---- Helpers ---------------------------------------------------------------
+
+/** Extract real client IP — on Cloud Run the real IP is the LAST in x-forwarded-for */
+const getClientIP = (req) => {
+  const fwd = req.headers['x-forwarded-for'];
+  if (fwd) {
+    const parts = fwd.split(',').map(s => s.trim()).filter(Boolean);
+    // Cloud Run prepends proxies; real client IP is the last one
+    // If only one value, it's the direct client
+    return parts.length > 1 ? parts[parts.length - 1] : parts[0];
+  }
+  return req.socket.remoteAddress || 'unknown';
+};
+
+/** Validate a video URL — must be http/https with a host */
+const isValidUrl = (s) => {
+  if (typeof s !== 'string' || s.length > MAX_URL_LENGTH) return false;
+  try {
+    const u = new URL(s);
+    return (u.protocol === 'http:' || u.protocol === 'https:') && u.hostname.length > 0;
+  } catch { return false; }
+};
+
 // ---- Job queue -------------------------------------------------------------
 
 const queue = new JobQueue({concurrency: 2, pipeline: runPipeline});
 
 // ---- Simple HTTP router (zero dependencies) --------------------------------
 
-const corsHeaders = {
+const securityHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-API-Key',
   'Access-Control-Max-Age': '86400',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'X-XSS-Protection': '0', // deprecated but signals intent
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
 };
 
 const json = (res, data, status = 200) => {
-  res.writeHead(status, {...corsHeaders, 'Content-Type': 'application/json'});
+  res.writeHead(status, {...securityHeaders, 'Content-Type': 'application/json'});
   res.end(JSON.stringify(data));
 };
 
 const parseBody = async (req) => {
   const buffers = [];
-  for await (const chunk of req) buffers.push(chunk);
+  let totalSize = 0;
+  for await (const chunk of req) {
+    totalSize += chunk.length;
+    if (totalSize > MAX_BODY_SIZE) throw Object.assign(new Error('Request body too large'), {statusCode: 413});
+    buffers.push(chunk);
+  }
   const raw = Buffer.concat(buffers).toString();
-  try { return JSON.parse(raw); } catch { return {}; }
+  try { return JSON.parse(raw); } catch { if (raw.length > 0) throw Object.assign(new Error('Invalid JSON'), {statusCode: 400}); return {}; }
 };
 
 const resolveApiKey = (body, headers, ip) => {
@@ -80,20 +143,36 @@ const resolveApiKey = (body, headers, ip) => {
 const server = createServer(async (req, res) => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, corsHeaders);
+    res.writeHead(204, securityHeaders);
     res.end();
     return;
   }
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+  const ip = getClientIP(req);
+  const requestId = randomUUID().slice(0, 8);
+  const startMs = Date.now();
+
+  // Apply rate limiting
+  const rate = checkRateLimit(ip);
+  res.setHeader('X-Request-Id', requestId);
+  res.setHeader('X-RateLimit-Remaining', String(rate.remaining));
+  if (!rate.allowed) {
+    res.setHeader('Retry-After', String(rate.retryAfter));
+    return json(res, {error: 'Too many requests', retryAfter: rate.retryAfter}, 429);
+  }
 
   try {
     // GET /api/health
     if (req.method === 'GET' && url.pathname === '/api/health') {
       const jobs = queue.getAll();
       const active = jobs.filter(j => j.status === 'queued' || j.status === 'running').length;
-      return json(res, {status: 'ok', uptime: process.uptime(), activeJobs: active, totalJobs: jobs.length});
+      const mem = process.memoryUsage();
+      return json(res, {
+        status: 'ok', uptime: Math.round(process.uptime()),
+        activeJobs: active, totalJobs: jobs.length, queueLimit: MAX_QUEUE_SIZE,
+        memory: { heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024), heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024) },
+      });
     }
 
     // GET /api/jobs
@@ -106,7 +185,7 @@ const server = createServer(async (req, res) => {
       const id = url.pathname.split('/api/jobs/')[1];
       const job = queue.get(id);
       if (!job) return json(res, {error: 'Job not found'}, 404);
-      const {_events, ...jobData} = job;
+      const {_events, apiKey, errorStack, ...jobData} = job;
       return json(res, jobData);
     }
 
@@ -115,13 +194,13 @@ const server = createServer(async (req, res) => {
       const id = url.pathname.split('/api/jobs/')[1].replace('/stream', '');
       const job = queue.get(id);
       if (!job) {
-        res.writeHead(404, corsHeaders);
+        res.writeHead(404, securityHeaders);
         res.end();
         return;
       }
 
       res.writeHead(200, {
-        ...corsHeaders,
+        ...securityHeaders,
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
@@ -177,6 +256,12 @@ const server = createServer(async (req, res) => {
 
     // POST /api/jobs
     if (req.method === 'POST' && url.pathname === '/api/jobs') {
+      // Enforce body size limit
+      const contentLength = Number(req.headers['content-length'] ?? 0);
+      if (contentLength > MAX_BODY_SIZE) {
+        return json(res, {error: `Request body too large (max ${MAX_BODY_SIZE / 1024 / 1024} MB)`}, 413);
+      }
+
       const body = await parseBody(req);
       const apiKey = resolveApiKey(body, req.headers, ip);
 
@@ -190,15 +275,23 @@ const server = createServer(async (req, res) => {
         }, 402);
       }
 
-      const url = body.url;
-      if (!url) return json(res, {error: 'url is required'}, 400);
+      if (!body.url || !isValidUrl(body.url)) {
+        return json(res, {error: 'A valid http/https video URL is required'}, 400);
+      }
+
+      // Queue size limit
+      const pending = queue.getAll().filter(j => j.status === 'queued' || j.status === 'running').length;
+      if (pending >= MAX_QUEUE_SIZE) {
+        return json(res, {error: 'Server busy — too many jobs queued. Try again later.'}, 503);
+      }
 
       const job = queue.submit({
-        url,
+        url: body.url,
         options: body.options ?? {research: true},
         apiKey: apiKey === OPERATOR_KEY ? undefined : apiKey, // Don't pass operator key as override
       });
 
+      res.setHeader('X-Job-Id', job.id);
       return json(res, {jobId: job.id, status: job.status}, 202);
     }
 
@@ -237,13 +330,78 @@ const server = createServer(async (req, res) => {
     // 404
     json(res, {error: 'Not found'}, 404);
   } catch (err) {
-    console.error('Server error:', err);
-    json(res, {error: 'Internal server error'}, 500);
+    const code = err.statusCode ?? 500;
+    const level = code >= 500 ? 'error' : 'warn';
+    const log = {ts: new Date().toISOString(), rid: requestId, level, method: req.method, path: url.pathname, ip, status: code, error: err.message};
+    if (code >= 500) log.stack = err.stack?.split('\n').slice(0, 4).join(' | ');
+    console[code >= 500 ? 'error' : 'warn'](JSON.stringify(log));
+    json(res, {error: code >= 500 ? 'Internal server error' : err.message, requestId}, code);
+  } finally {
+    const durationMs = Date.now() - startMs;
+    // Structured access log
+    console.log(JSON.stringify({
+      ts: new Date().toISOString(), rid: requestId, level: 'info',
+      method: req.method, path: url.pathname, ip, status: res.statusCode, durationMs,
+    }));
   }
 });
 
 server.listen(PORT, () => {
-  console.log(`YTResearchAI web server running on http://localhost:${PORT}`);
-  console.log(`Free tier: ${FREE_TIER_LIMIT} reports/day${OPERATOR_KEY ? ' (enabled)' : ' (disabled — set OPERATOR_OPENAI_KEY to enable)'}`);
-  console.log(`Endpoints: POST /api/jobs, GET /api/jobs/:id, GET /api/jobs/:id/stream`);
+  console.log(JSON.stringify({
+    ts: new Date().toISOString(), level: 'info', event: 'startup',
+    port: PORT, freeTierLimit: FREE_TIER_LIMIT,
+    freeTierEnabled: Boolean(OPERATOR_KEY),
+    maxQueueSize: MAX_QUEUE_SIZE,
+    ratePerSec: RATE_LIMITS.perSecond, ratePerMin: RATE_LIMITS.perMinute,
+    nodeVersion: process.version, platform: process.platform,
+  }));
+});
+
+// ---- Graceful shutdown ---------------------------------------------------
+
+let shuttingDown = false;
+const shutdown = async (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(JSON.stringify({ts: new Date().toISOString(), level: 'info', event: 'shutdown', signal}));
+
+  // Stop accepting new jobs
+  queue._queue.length = 0; // Clear pending queue
+
+  // Wait for running jobs to finish (up to 8s of Cloud Run's 10s grace period)
+  const deadline = Date.now() + 8000;
+  const waitForRunning = () => {
+    const running = queue.getAll().filter(j => j.status === 'running').length;
+    if (running === 0 || Date.now() >= deadline) {
+      queue.shutdown();
+      server.close(() => process.exit(0));
+    } else {
+      setTimeout(waitForRunning, 200);
+    }
+  };
+  waitForRunning();
+
+  // Force exit after deadline
+  setTimeout(() => { queue.shutdown(); process.exit(0); }, 9000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
+// ---- Crash handlers ------------------------------------------------------
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error(JSON.stringify({
+    ts: new Date().toISOString(), level: 'error', event: 'unhandledRejection',
+    error: reason?.message ?? String(reason),
+    stack: reason?.stack?.split('\n').slice(0, 6).join(' | '),
+  }));
+});
+
+process.on('uncaughtException', (err) => {
+  console.error(JSON.stringify({
+    ts: new Date().toISOString(), level: 'error', event: 'uncaughtException',
+    error: err.message, stack: err.stack?.split('\n').slice(0, 6).join(' | '),
+  }));
+  // Don't exit — let the process limp along. If it's truly fatal, it'll crash anyway.
 });
