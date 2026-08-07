@@ -22,10 +22,13 @@ loadEnv();
 
 // ---- File helpers (using temp dir instead of outputs/run-*) ----------------
 
-const downloadVideo = (url, downloadDir) => {
+const downloadVideo = (url, downloadDir, {audioOnly = false} = {}) => {
   const isYouTube = /youtube\.com|youtu\.be/i.test(url);
   const outputTemplate = path.join(downloadDir, '%(title).180B [%(id)s].%(ext)s');
-  const args = ['--no-playlist','--merge-output-format','mp4','--remux-video','mp4',
+  const formatArgs = audioOnly
+    ? ['--format','bestaudio']
+    : ['--merge-output-format','mp4','--remux-video','mp4'];
+  const args = ['--no-playlist',...formatArgs,
     '--write-info-json','--output',outputTemplate,'--print','after_move:filepath'];
   if (isYouTube) args.push('--extractor-args','youtube:player_client=android,web');
   args.push(url);
@@ -127,7 +130,7 @@ export async function runPipeline({url, options = {}, apiKey, tempDir, onProgres
 
   // Stage 1: Download
   onProgress('download', 5, 'Downloading video...');
-  const videoPath = downloadVideo(url, tempDir);
+  const videoPath = downloadVideo(url, tempDir, {audioOnly: config.audioOnly});
 
   // Stage 2: Transcribe
   onProgress('transcribe', 15, 'Extracting audio...');

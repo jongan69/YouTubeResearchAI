@@ -5,7 +5,7 @@
 
 COMPARTMENT="ocid1.tenancy.oc1..aaaaaaaa2xuhyixsgspdmdgx64xiev5jatafsxnka62mo4kmhib4fya3ynqa"
 STATE_FILE="/tmp/oci-instance-state.json"
-RETRY_DELAY=60
+RETRY_DELAY=180
 
 # Regions and their ADs: region|ad1,ad2,ad3
 REGIONS=(
@@ -168,10 +168,7 @@ while true; do
     done
   done
 
-  # Adaptive backoff
-  DELAY=$RETRY_DELAY
-  [ $ATTEMPT -gt 30 ] && DELAY=300
-  [ $ATTEMPT -gt 100 ] && DELAY=600
-  echo "  ⏳ Cycle #$ATTEMPT done. Waiting ${DELAY}s..."
-  sleep $DELAY
+  # Fixed 3-min retry — aggressive mode
+  echo "  ⏳ Cycle #$ATTEMPT done. Waiting 180s..."
+  sleep 180
 done

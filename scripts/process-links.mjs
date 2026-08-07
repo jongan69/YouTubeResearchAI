@@ -39,6 +39,7 @@ Core options:
   --transcript FILE           Generate report from existing transcript
   --title TEXT                Report title (with --transcript)
   --skip-download             Treat link lines as local video paths
+  --audio-only                Download audio only (faster for podcasts, skips vision)
   --no-report                 Download and transcribe only
 
 Research options:
@@ -109,6 +110,11 @@ const researchEnabled = resolvedConfig.researchEnabled && !noReport;
 const isDeepResearch = resolvedConfig.researchDepth === 'deep';
 const verifyEnabled = resolvedConfig.verifyEnabled && researchEnabled;
 const visionEnabled = resolvedConfig.visionEnabled && !noReport;
+const audioOnly = resolvedConfig.audioOnly;
+// Audio-only disables vision (no video frames to analyze)
+const effectiveVision = audioOnly ? false : visionEnabled;
+if (audioOnly && visionEnabled) console.log('⚠️  Vision disabled — audio-only mode has no video frames.');
+if (audioOnly) console.log('🎧 Audio-only mode — downloading best audio stream instead of full video.');
 const synthesisEnabled = resolvedConfig.synthesisEnabled && !noReport;
 
 if (transcriptOnlyPath && noReport) throw new Error('--transcript cannot be combined with --no-report.');
@@ -123,7 +129,7 @@ if (!transcriptOnlyPath && inputs.length === 0) throw new Error(`No links found 
 ensureDir(outRoot); ensureDir(runDir); ensureDir(downloadDir);
 ensureDir(transcriptDir); ensureDir(reportDir);
 if (researchEnabled) ensureDir(researchDir);
-if (visionEnabled) ensureDir(framesDir);
+if (effectiveVision) ensureDir(framesDir);
 if (synthesisEnabled && inputs.length >= 2) ensureDir(synthesisDir);
 if (fs.existsSync(linksPath)) fs.copyFileSync(linksPath, path.join(runDir, 'links.txt'));
 
@@ -131,7 +137,7 @@ const {ai, transcription: transcriptionProvider} = await createProviders(resolve
 
 // Report provider capabilities
 const capabilities = ai.capabilities ?? {};
-if (visionEnabled && !capabilities.vision) {
+if (effectiveVision && !capabilities.vision) {
   console.warn('⚠ Vision analysis requested but provider does not support image inputs. Disabling vision.');
 }
 
@@ -147,7 +153,7 @@ const manifest = {
   researchEnabled: researchEnabled || undefined,
   researchDepth: researchEnabled ? resolvedConfig.researchDepth : undefined,
   verifyEnabled: verifyEnabled || undefined,
-  visionEnabled: (visionEnabled && capabilities.vision) || undefined,
+  visionEnabled: (effectiveVision && capabilities.vision) || undefined,
   synthesisEnabled: (synthesisEnabled && inputs.length >= 2) || undefined,
   items: [],
 };
@@ -157,14 +163,17 @@ const writeManifest = () => fs.writeFileSync(manifestPath, `${JSON.stringify(man
 // Pipeline helpers (download, transcribe, chunk, report)
 // =========================================================================
 
-const downloadVideo = (url) => {
+const downloadVideo = (url, {audioOnly = false} = {}) => {
   const outputTemplate = path.join(downloadDir, '%(title).180B [%(id)s].%(ext)s');
   const isYouTube = /youtube\.com|youtu\.be/i.test(url);
 
+  const formatArgs = audioOnly
+    ? ['--format','bestaudio']
+    : ['--merge-output-format','mp4','--remux-video','mp4'];
+
   const baseArgs = [
     '--no-playlist',
-    '--merge-output-format','mp4',
-    '--remux-video','mp4',
+    ...formatArgs,
     '--write-info-json',
     '--output',outputTemplate,
     '--print','after_move:filepath',
@@ -426,7 +435,7 @@ const runResearchPipeline = async ({transcriptText, title, source, slug, videoPa
   console.log(`  Domain: ${domain.name}`);
 
   // ---- Vision analysis -------------------------------------------------
-  if (visionEnabled && capabilities.vision && videoPath) {
+  if (effectiveVision && capabilities.vision && videoPath) {
     console.log('  Running visual frame analysis...');
     const itemFramesDir = path.join(framesDir, slug);
     const vision = new VisionAnalyzer({ai});
@@ -543,7 +552,7 @@ if (transcriptOnlyPath) {
 } else {
   for (const [index, input] of inputs.entries()) {
     console.log(`\n[${index+1}/${inputs.length}] ${skipDownload?'Using':'Downloading'} ${input}`);
-    const sourceVideo = skipDownload ? path.resolve(input) : downloadVideo(input);
+    const sourceVideo = skipDownload ? path.resolve(input) : downloadVideo(input, {audioOnly});
     if (!fs.existsSync(sourceVideo)) throw new Error(`Video not found: ${sourceVideo}`);
 
     const slug = slugify(path.basename(sourceVideo, path.extname(sourceVideo)));

@@ -130,6 +130,11 @@ export const buildConfig = (args = {}) => {
       args['frames-per-minute'] ?? process.env.FRAMES_PER_MINUTE ?? 1,
     ),
 
+    // ---- Audio-only Downloads -----------------------------------------------
+    audioOnly: resolveBool(
+      args['audio-only'] ?? args.audioOnly ?? process.env.AUDIO_ONLY ?? false,
+    ),
+
     // ---- Phase 6: Iterative Research ----------------------------------------
     researchDepth: String(
       args['research-depth'] ?? process.env.RESEARCH_DEPTH ?? (
