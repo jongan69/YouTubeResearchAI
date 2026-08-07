@@ -7,8 +7,10 @@ import {randomUUID} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
+import telemetry from './telemetry.mjs';
 
 const JOB_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const STORE_PATH = process.env.JOB_STORE_PATH || path.join(os.tmpdir(), 'ytresearch-jobs.json');
 
 export class JobQueue extends EventEmitter {
   constructor({concurrency = 2, pipeline, tempDir} = {}) {
@@ -19,7 +21,54 @@ export class JobQueue extends EventEmitter {
     this._jobs = new Map();
     this._queue = [];
     this._running = 0;
+
+    // Load persisted jobs from disk
+    this._loadFromDisk();
+
+    // Auto-save every 30 seconds
+    this._saveInterval = setInterval(() => this._saveToDisk(), 30_000);
     this._cleanupInterval = setInterval(() => this._cleanup(), 60 * 60 * 1000); // hourly
+  }
+
+  // ---- Persistence ---------------------------------------------------------
+
+  _loadFromDisk() {
+    try {
+      if (!fs.existsSync(STORE_PATH)) return;
+      const raw = fs.readFileSync(STORE_PATH, 'utf8');
+      const stored = JSON.parse(raw);
+      if (!Array.isArray(stored)) return;
+      let loaded = 0;
+      for (const j of stored) {
+        if (!j.id || !j.createdAt) continue;
+        // Only restore completed/failed — skip queued/running
+        if (j.status !== 'complete' && j.status !== 'failed') continue;
+        // Skip expired
+        if (Date.now() - new Date(j.createdAt).getTime() > JOB_TTL_MS) continue;
+        j._events = j._events || [];
+        this._jobs.set(j.id, j);
+        loaded++;
+      }
+      if (loaded > 0) console.log(JSON.stringify({
+        ts: new Date().toISOString(), level: 'info', event: 'jobs-loaded',
+        count: loaded, path: STORE_PATH,
+      }));
+    } catch (err) {
+      console.error(JSON.stringify({
+        ts: new Date().toISOString(), level: 'error', event: 'jobs-load-failed',
+        error: err.message, path: STORE_PATH,
+      }));
+    }
+  }
+
+  _saveToDisk() {
+    try {
+      const all = [...this._jobs.values()];
+      const toSave = all.filter(j => j.status === 'complete' || j.status === 'failed');
+      if (toSave.length === 0) return;
+      const stripped = toSave.map(({_events, apiKey, errorStack, ...rest}) => rest);
+      fs.writeFileSync(STORE_PATH, JSON.stringify(stripped), 'utf8');
+    } catch { /* best-effort */ }
   }
 
   /** Submit a job. Returns the job object immediately. */
@@ -43,6 +92,7 @@ export class JobQueue extends EventEmitter {
     this._queue.push(id);
     this.emit('job-created', {id});
     this._processNext();
+    telemetry.jobCreated(id, { url, hasApiKey: Boolean(apiKey) });
     return job;
   }
 
@@ -84,9 +134,11 @@ export class JobQueue extends EventEmitter {
     return [...this._jobs.values()].map(({_events, apiKey, errorStack, ...rest}) => rest);
   }
 
-  /** Stop the queue and clean up. */
+  /** Stop the queue, save state, and clean up. */
   shutdown() {
+    clearInterval(this._saveInterval);
     clearInterval(this._cleanupInterval);
+    this._saveToDisk();
   }
 
   // ---- internal ---------------------------------------------------------
@@ -131,18 +183,30 @@ export class JobQueue extends EventEmitter {
       job.status = 'complete';
       job.completedAt = new Date().toISOString();
       job.result = result;
+      const durationMs = Date.now() - new Date(job.createdAt).getTime();
+      telemetry.jobCompleted(job.id, {
+        url: job.url, durationMs,
+        sourcesCited: result.references?.length ?? 0,
+        reportLength: result.reportMarkdown?.length ?? 0,
+      });
       this._emitJobEvent(job, {type: 'complete', result});
+      this._saveToDisk();
     } catch (err) {
       job.status = 'failed';
       job.completedAt = new Date().toISOString();
       job.error = err.message ?? String(err);
       job.errorStack = err.stack?.split('\n').slice(0, 8).join('\n');
+      const durationMs = Date.now() - new Date(job.createdAt).getTime();
       console.error(JSON.stringify({
         ts: new Date().toISOString(), level: 'error', event: 'job-failed',
         jobId: job.id, url: job.url, stage: job.stage,
         error: job.error, stack: job.errorStack,
       }));
+      telemetry.jobFailed(job.id, {
+        url: job.url, error: job.error, stage: job.stage, durationMs,
+      });
       this._emitJobEvent(job, {type: 'error', message: job.error, stage: job.stage});
+      this._saveToDisk();
     } finally {
       // Clean up temp dir
       try { fs.rmSync(path.join(this._tempDir, `ytresearch-${job.id}`), {recursive: true, force: true}); } catch {}

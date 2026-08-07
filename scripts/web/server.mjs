@@ -8,6 +8,7 @@ import {randomUUID} from 'node:crypto';
 import {loadEnv} from '../lib.mjs';
 import {runPipeline} from '../pipeline.mjs';
 import {JobQueue} from './job-queue.mjs';
+import telemetry from './telemetry.mjs';
 
 loadEnv();
 
@@ -159,6 +160,7 @@ const server = createServer(async (req, res) => {
   res.setHeader('X-RateLimit-Remaining', String(rate.remaining));
   if (!rate.allowed) {
     res.setHeader('Retry-After', String(rate.retryAfter));
+    telemetry.rateLimited(ip);
     return json(res, {error: 'Too many requests', retryAfter: rate.retryAfter}, 429);
   }
 
@@ -355,6 +357,7 @@ server.listen(PORT, () => {
     ratePerSec: RATE_LIMITS.perSecond, ratePerMin: RATE_LIMITS.perMinute,
     nodeVersion: process.version, platform: process.platform,
   }));
+  telemetry.init({ freeTierLimit: FREE_TIER_LIMIT, maxQueueSize: MAX_QUEUE_SIZE });
 });
 
 // ---- Graceful shutdown ---------------------------------------------------
@@ -373,8 +376,10 @@ const shutdown = async (signal) => {
   const waitForRunning = () => {
     const running = queue.getAll().filter(j => j.status === 'running').length;
     if (running === 0 || Date.now() >= deadline) {
-      queue.shutdown();
-      server.close(() => process.exit(0));
+      telemetry.shutdown().finally(() => {
+        queue.shutdown();
+        server.close(() => process.exit(0));
+      });
     } else {
       setTimeout(waitForRunning, 200);
     }

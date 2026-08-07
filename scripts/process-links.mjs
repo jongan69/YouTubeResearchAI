@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {execFileSync} from 'node:child_process';
+import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -57,6 +57,35 @@ Research options:
   --max-frames N              Max frames to extract. Default: 20
   --research-iterations N     Max deep research iterations. Default: 3
 `;
+
+// ---- Async spawn helper (replaces execFileSync — unblocks event loop) -----
+
+const asyncExec = (cmd, args, {timeoutMs = 0, captureStdout = true, captureStderr = false} = {}) => new Promise((resolve, reject) => {
+  const child = spawn(cmd, args, {stdio: ['ignore', captureStdout ? 'pipe' : 'inherit', captureStderr ? 'pipe' : 'inherit']});
+  let stdout = '', stderr = '';
+  if (captureStdout) child.stdout.on('data', (d) => { stdout += d; });
+  if (captureStderr) child.stderr.on('data', (d) => { stderr += d; });
+
+  let timer;
+  if (timeoutMs > 0) {
+    timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error(`${cmd} timed out after ${timeoutMs / 1000}s`));
+    }, timeoutMs);
+  }
+
+  child.on('error', (err) => { clearTimeout(timer); reject(err); });
+  child.on('close', (code) => {
+    clearTimeout(timer);
+    if (code === 0) resolve({stdout, stderr});
+    else reject(Object.assign(new Error(`${cmd} exited with code ${code}${stderr ? ': ' + stderr.slice(0, 200) : ''}`), {code, stdout, stderr}));
+  });
+});
+
+const DOWNLOAD_TIMEOUT_MS = 15 * 60 * 1000;
+const FFMPEG_TIMEOUT_MS = 5 * 60 * 1000;
+
+// ---- Config ---------------------------------------------------------------
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help || args.h) { console.log(usage); process.exit(0); }
@@ -163,7 +192,7 @@ const writeManifest = () => fs.writeFileSync(manifestPath, `${JSON.stringify(man
 // Pipeline helpers (download, transcribe, chunk, report)
 // =========================================================================
 
-const downloadVideo = (url, {audioOnly = false} = {}) => {
+const downloadVideo = async (url, {audioOnly = false} = {}) => {
   const outputTemplate = path.join(downloadDir, '%(title).180B [%(id)s].%(ext)s');
   const isYouTube = /youtube\.com|youtu\.be/i.test(url);
 
@@ -188,35 +217,41 @@ const downloadVideo = (url, {audioOnly = false} = {}) => {
 
   const inContainer = fs.existsSync('/.dockerenv') || process.env.K_SERVICE || process.env.CLOUD_RUN_JOB;
 
-  let stdout = '';
+  let result;
   try {
-    stdout = execFileSync('yt-dlp', baseArgs, {encoding:'utf8',stdio:['ignore','pipe','inherit']});
+    result = await asyncExec('yt-dlp', baseArgs, {timeoutMs: DOWNLOAD_TIMEOUT_MS});
   } catch {
     // Cookies retry only on desktop with Chrome available
     if (isYouTube && !inContainer) {
       console.warn('Download failed without browser cookies. Retrying with Chrome cookies...');
-      const cookieArgs = ['--cookies-from-browser','chrome',...baseArgs];
-      stdout = execFileSync('yt-dlp', cookieArgs, {encoding:'utf8',stdio:['ignore','pipe','inherit']});
+      result = await asyncExec('yt-dlp', ['--cookies-from-browser','chrome',...baseArgs], {timeoutMs: DOWNLOAD_TIMEOUT_MS});
     } else {
       const hint = isYouTube && inContainer ? ' (running in container — no browser cookies available)' : '';
       throw new Error(`yt-dlp download failed for ${url}.${hint}`);
     }
   }
-  const downloaded = stdout.split(/\r?\n/).map((l)=>l.trim()).filter(Boolean).at(-1);
+  const downloaded = result.stdout.split(/\r?\n/).map((l)=>l.trim()).filter(Boolean).at(-1);
   if (!downloaded) throw new Error(`yt-dlp did not report a downloaded file for ${url}`);
   return path.resolve(downloaded);
 };
 
-const probeDurationSeconds = (mp) => Number(execFileSync('ffprobe',['-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',mp],{encoding:'utf8'}).trim());
+const probeDurationSeconds = async (mp) => {
+  const r = await asyncExec('ffprobe', ['-v','error','-show_entries','format=duration','-of','default=nw=1:nk=1',mp], {timeoutMs: 30_000});
+  return Number(r.stdout.trim());
+};
 
-const makeAudio = (vp) => {
+const makeAudio = async (vp) => {
   const ap = path.join(os.tmpdir(), `yt-research-audio-${Date.now()}.mp3`);
-  execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-i',vp,'-vn','-acodec','libmp3lame','-b:a','48k','-ar','16000','-ac','1',ap],{stdio:'inherit'});
+  await asyncExec('ffmpeg',
+    ['-hide_banner','-loglevel','error','-y','-i',vp,'-vn','-acodec','libmp3lame','-b:a','48k','-ar','16000','-ac','1',ap],
+    {timeoutMs: FFMPEG_TIMEOUT_MS, captureStdout: false});
   return ap;
 };
-const makeAudioChunk = ({sourceAudio,offsetSeconds,durationSeconds,index}) => {
+const makeAudioChunk = async ({sourceAudio,offsetSeconds,durationSeconds,index}) => {
   const cp = path.join(os.tmpdir(),`yt-research-audio-${Date.now()}-${index}.mp3`);
-  execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-ss',String(offsetSeconds),'-t',String(durationSeconds),'-i',sourceAudio,'-acodec','libmp3lame','-b:a','48k','-ar','16000','-ac','1',cp],{stdio:'inherit'});
+  await asyncExec('ffmpeg',
+    ['-hide_banner','-loglevel','error','-y','-ss',String(offsetSeconds),'-t',String(durationSeconds),'-i',sourceAudio,'-acodec','libmp3lame','-b:a','48k','-ar','16000','-ac','1',cp],
+    {timeoutMs: FFMPEG_TIMEOUT_MS, captureStdout: false});
   return cp;
 };
 
@@ -232,16 +267,16 @@ const combineTranscriptions = (parts, dur) => {
 
 const transcribeAudioFile = async ({audioPath,prompt}) => transcriptionProvider.transcribe({audioPath, model: transcriptionModel, prompt});
 const transcribeVideo = async ({videoPath,prompt}) => {
-  const audioPath = makeAudio(videoPath); const chunkPaths = [];
+  const audioPath = await makeAudio(videoPath); const chunkPaths = [];
   try {
-    const dur = probeDurationSeconds(audioPath);
+    const dur = await probeDurationSeconds(audioPath);
     console.log(`Prepared audio: ${(fs.statSync(audioPath).size/1024/1024).toFixed(1)} MB, ${dur.toFixed(1)}s`);
     if (dur <= chunkSeconds) return transcribeAudioFile({audioPath,prompt});
     const parts = []; const cc = Math.ceil(dur/chunkSeconds);
     console.log(`Audio is ${dur.toFixed(1)}s; splitting into ${cc} chunks.`);
     for (let i=0;i<cc;i++) {
       const off = i*chunkSeconds; const d = Math.min(chunkSeconds,dur-off);
-      const cp = makeAudioChunk({sourceAudio:audioPath,offsetSeconds:off,durationSeconds:d,index:i+1});
+      const cp = await makeAudioChunk({sourceAudio:audioPath,offsetSeconds:off,durationSeconds:d,index:i+1});
       chunkPaths.push(cp);
       parts.push({transcription: await transcribeAudioFile({audioPath:cp,prompt}), offsetSeconds: off});
     }
@@ -552,7 +587,7 @@ if (transcriptOnlyPath) {
 } else {
   for (const [index, input] of inputs.entries()) {
     console.log(`\n[${index+1}/${inputs.length}] ${skipDownload?'Using':'Downloading'} ${input}`);
-    const sourceVideo = skipDownload ? path.resolve(input) : downloadVideo(input, {audioOnly});
+    const sourceVideo = skipDownload ? path.resolve(input) : await downloadVideo(input, {audioOnly});
     if (!fs.existsSync(sourceVideo)) throw new Error(`Video not found: ${sourceVideo}`);
 
     const slug = slugify(path.basename(sourceVideo, path.extname(sourceVideo)));
